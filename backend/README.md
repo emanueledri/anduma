@@ -35,6 +35,26 @@ identifica con l'header `X-Device-Id` nelle altre chiamate `/me/*`.
 - `GET|POST /me/favorites` + `DELETE /me/favorites/{id}` — preferiti `{type: stop|line, ref}`
 - `GET|POST /me/subscriptions` + `DELETE /me/subscriptions/{id}` — alert `{kind: imminent|strike, ...}`
 
+## Motore alert + scheduler (M3)
+
+Due valutazioni periodiche (APScheduler), disattivate di default:
+
+- **imminent** (~15 s): se un mezzo della linea sottoscritta è entro `threshold_min`
+  dalla fermata e non già notificato per quel `trip_id` → accoda una push.
+- **strike** (~1 h): per ogni nuovo sciopero rilevante per Torino → accoda una push
+  alle sottoscrizioni `strike`.
+
+La deduplica è idempotente (tabella `notified_events`, chiave `(subscription_id,
+dedup_key)` con TTL). Il dispatcher è disaccoppiato (coda in-process `InProcessDispatcher`):
+qui si accoda soltanto, l'invio reale (FCM/APNs) arriva in M4.
+
+```bash
+# Abilita lo scheduler nel processo (di default è spento, nessun polling):
+export TT_SCHEDULER_ENABLED=true
+export TT_IMMINENT_INTERVAL_S=15
+export TT_STRIKE_INTERVAL_S=3600
+```
+
 ## Infra & persistenza (M1)
 
 Stack locale (Postgres + Redis) via docker-compose:

@@ -11,8 +11,10 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import Depends, FastAPI, HTTPException, Query
 
 from . import realtime, scioperi
+from .alerts import InProcessDispatcher, build_scheduler
 from .cache import RedisCache
-from .db import db_healthcheck
+from .config import get_settings
+from .db import SessionLocal, db_healthcheck
 from .me import router as me_router
 from .models import (
     AlertsResponse,
@@ -29,14 +31,25 @@ ATTRIBUTION = "Dati: Città di Torino / GTT (CC BY 4.0); scioperi MIT; mappa © 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings = get_settings()
     provider = LiveProvider()
     app.state.provider = provider
+    app.state.dispatcher = InProcessDispatcher()
+    app.state.scheduler = None
     # Pre-carica il GTFS statico (tollerante a rete assente).
     with suppress(Exception):
         provider.gtfs()
+    # Scheduler alert: disattivato di default (non fa polling finché non abilitato).
+    if settings.scheduler_enabled:
+        scheduler = build_scheduler(provider, app.state.dispatcher, SessionLocal, settings)
+        scheduler.start()
+        app.state.scheduler = scheduler
     try:
         yield
     finally:
+        if app.state.scheduler is not None:
+            with suppress(Exception):
+                app.state.scheduler.shutdown(wait=False)
         with suppress(Exception):
             provider.close()
 

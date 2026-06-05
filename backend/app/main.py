@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from . import realtime, scioperi
 from .cache import RedisCache
 from .db import db_healthcheck
+from .me import router as me_router
 from .models import (
     AlertsResponse,
     ArrivalsResponse,
@@ -47,6 +48,8 @@ app = FastAPI(
     description=ATTRIBUTION,
     lifespan=lifespan,
 )
+
+app.include_router(me_router)
 
 
 def get_provider() -> DataProvider:

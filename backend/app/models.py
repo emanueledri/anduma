@@ -7,7 +7,10 @@ grazia (mezzo senza posizione, trip update senza orario, ecc.).
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import datetime as dt
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Health(BaseModel):
@@ -92,3 +95,70 @@ class Strike(BaseModel):
 class AlertsResponse(BaseModel):
     service_alerts: list[ServiceAlert] = Field(default_factory=list)
     strikes: list[Strike] = Field(default_factory=list)
+
+
+# ----------------------------------------------------------------- utenti (v1)
+# Per l'MVP l'identità è un device anonimo: registrato via POST /me/devices,
+# poi identificato dall'header X-Device-Id nelle chiamate /me/*.
+
+
+class DeviceCreate(BaseModel):
+    platform: Literal["android", "ios"]
+    token: str = Field(..., min_length=1, description="Token push FCM")
+
+
+class DeviceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    platform: str
+    created_at: dt.datetime
+
+
+class FavoriteCreate(BaseModel):
+    type: Literal["stop", "line"]
+    ref: str = Field(..., min_length=1, description="stop_id (es. '350') o linea (es. '10')")
+
+
+class FavoriteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    type: str
+    ref: str
+
+
+class SubscriptionCreate(BaseModel):
+    kind: Literal["imminent", "strike"]
+    stop_id: str | None = None
+    line: str | None = None
+    threshold_min: int | None = Field(None, ge=1, le=120)
+
+    @model_validator(mode="after")
+    def _check_required(self) -> SubscriptionCreate:
+        if self.kind == "imminent":
+            missing = [
+                name
+                for name, val in (
+                    ("stop_id", self.stop_id),
+                    ("line", self.line),
+                    ("threshold_min", self.threshold_min),
+                )
+                if val is None
+            ]
+            if missing:
+                raise ValueError(f"kind 'imminent' richiede: {', '.join(missing)}")
+        elif self.kind == "strike" and not self.line:
+            raise ValueError("kind 'strike' richiede 'line'")
+        return self
+
+
+class SubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: str
+    stop_id: str | None = None
+    line: str | None = None
+    threshold_min: int | None = None
+    active: bool

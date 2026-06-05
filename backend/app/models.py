@@ -15,6 +15,8 @@ class Health(BaseModel):
     gtfs_loaded: bool = False
     routes: int = 0
     stops: int = 0
+    db: bool = False
+    cache: str = "memory"
 
 
 class Line(BaseModel):

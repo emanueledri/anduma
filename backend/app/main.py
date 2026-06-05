@@ -11,6 +11,8 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import Depends, FastAPI, HTTPException, Query
 
 from . import realtime, scioperi
+from .cache import RedisCache
+from .db import db_healthcheck
 from .models import (
     AlertsResponse,
     ArrivalsResponse,
@@ -55,11 +57,17 @@ def get_provider() -> DataProvider:
 @app.get("/health", response_model=Health)
 def health(provider: DataProvider = Depends(get_provider)) -> Health:
     gtfs = provider.gtfs()
+    cache_backend = "memory"
+    cache = getattr(provider, "cache", None)
+    if isinstance(cache, RedisCache):
+        cache_backend = "redis" if cache.ping() else "redis-down"
     return Health(
         status="ok",
         gtfs_loaded=bool(gtfs.routes),
         routes=len(gtfs.routes),
         stops=len(gtfs.stops),
+        db=db_healthcheck(),
+        cache=cache_backend,
     )
 
 

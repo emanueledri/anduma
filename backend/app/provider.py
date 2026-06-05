@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 from typing import Protocol
 
+from .cache import Cache, get_cache
 from .config import Settings, get_settings
 from .gtfs_static import GtfsStatic, download_zip_bytes
 from .realtime import FeedFetcher
@@ -29,7 +30,8 @@ class LiveProvider:
 
     def __init__(self, settings: Settings | None = None):
         self._settings = settings or get_settings()
-        self._fetcher = FeedFetcher(self._settings)
+        self._cache: Cache = get_cache(self._settings)
+        self._fetcher = FeedFetcher(self._settings, cache=self._cache)
         self._gtfs: GtfsStatic | None = None
         self._gtfs_expires_at: float = 0.0
         self._strikes: str = ""
@@ -68,6 +70,10 @@ class LiveProvider:
         except Exception:
             pass  # mantieni l'ultimo snapshot disponibile
         return self._strikes
+
+    @property
+    def cache(self) -> Cache:
+        return self._cache
 
     def close(self) -> None:
         self._fetcher.close()

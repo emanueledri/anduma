@@ -11,11 +11,11 @@ testabili da fixture; il fetch di rete con TTL sta in ``FeedFetcher``.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 
 import httpx
 from google.transit import gtfs_realtime_pb2
 
+from .cache import Cache, InMemoryCache
 from .config import Settings, get_settings
 from .gtfs_static import GtfsStatic
 from .models import Arrival, ServiceAlert, Vehicle
@@ -156,28 +156,30 @@ def service_alerts(
 
 
 # ------------------------------------------------------------------- TTL fetcher
-@dataclass
-class _Cached:
-    data: bytes
-    expires_at: float
-
-
 class FeedFetcher:
-    """Scarica i feed RT con cache TTL condivisa (un fetch per finestra)."""
+    """Scarica i feed RT con cache TTL condivisa (un fetch per finestra).
 
-    def __init__(self, settings: Settings | None = None, client: httpx.Client | None = None):
+    La cache è iniettabile: in-memory in sviluppo, Redis in produzione (la
+    stessa istanza è condivisa, così il polling resta centralizzato).
+    """
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        client: httpx.Client | None = None,
+        cache: Cache | None = None,
+    ):
         self._settings = settings or get_settings()
         self._client = client or httpx.Client(timeout=self._settings.http_timeout)
-        self._cache: dict[str, _Cached] = {}
+        self._cache: Cache = cache or InMemoryCache()
 
-    def _get(self, key: str, url: str, ttl: int, now: float | None = None) -> bytes:
-        now_ts = now if now is not None else time.time()
-        hit = self._cache.get(key)
-        if hit is not None and hit.expires_at > now_ts:
-            return hit.data
+    def _get(self, key: str, url: str, ttl: int) -> bytes:
+        hit = self._cache.get(f"rt:{key}")
+        if hit is not None:
+            return hit
         resp = self._client.get(url, follow_redirects=True)
         resp.raise_for_status()
-        self._cache[key] = _Cached(resp.content, now_ts + ttl)
+        self._cache.set(f"rt:{key}", resp.content, ttl)
         return resp.content
 
     def vehicle_positions(self) -> bytes:

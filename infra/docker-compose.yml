@@ -1,0 +1,43 @@
+# Stack di sviluppo locale: PostgreSQL + Redis.
+# Avvio:  docker compose -f infra/docker-compose.yml up -d
+# Il backend vi si collega via:
+#   TT_DATABASE_URL=postgresql+psycopg://transito:transito@localhost:5432/transito
+#   TT_REDIS_URL=redis://localhost:6379/0
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: transito-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-transito}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-transito}
+      POSTGRES_DB: ${POSTGRES_DB:-transito}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-transito} -d ${POSTGRES_DB:-transito}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: transito-redis
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

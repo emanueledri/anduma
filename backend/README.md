@@ -25,3 +25,29 @@ ruff check . && ruff format .
 
 Tutti i dati provengono dai feed GTT (CC BY 4.0 — "Città di Torino / GTT") e dal
 registro scioperi MIT. Vedi `../docs/DATA_SOURCES.md`.
+
+## Infra & persistenza (M1)
+
+Stack locale (Postgres + Redis) via docker-compose:
+
+```bash
+docker compose -f ../infra/docker-compose.yml up -d   # postgres + redis con healthcheck
+```
+
+Configurazione (env con prefisso `TT_`, vedi `.env.example`):
+
+```bash
+# Default sviluppo: SQLite + cache in-memory (nessun servizio esterno richiesto).
+# Con lo stack docker-compose:
+export TT_DATABASE_URL=postgresql+psycopg://transito:transito@localhost:5432/transito
+export TT_REDIS_URL=redis://localhost:6379/0
+```
+
+Migrazioni (Alembic):
+
+```bash
+alembic upgrade head            # applica lo schema (devices, favorites, subscriptions, notified_events)
+alembic revision --autogenerate -m "descrizione"   # nuova migrazione dai modelli ORM
+```
+
+`GET /health` riporta `db` (SELECT 1) e `cache` (`memory` | `redis` | `redis-down`).

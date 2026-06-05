@@ -10,6 +10,8 @@ def test_health(client):
     assert body["status"] == "ok"
     assert body["gtfs_loaded"] is True
     assert body["routes"] == 3 and body["stops"] == 3
+    assert isinstance(body["db"], bool)
+    assert body["cache"] == "memory"
 
 
 def test_lines(client):

@@ -15,7 +15,7 @@ di una linea a una fermata e per gli **scioperi** che toccano Torino/Piemonte.
 | Milestone | Descrizione | Stato |
 |-----------|-------------|:-----:|
 | **M0** | Fondamenta backend read-only (linee, fermate, arrivi, mezzi, avvisi) | ✅ |
-| M1 | Infra & persistenza (Postgres, Redis, migrazioni) | ⬜ |
+| **M1** | Infra & persistenza (Postgres, Redis, migrazioni Alembic) | ✅ |
 | M2 | Utenti, preferiti, sottoscrizioni | ⬜ |
 | M3 | Motore alert + scheduler | ⬜ |
 | M4 | Push FCM/APNs | ⬜ |

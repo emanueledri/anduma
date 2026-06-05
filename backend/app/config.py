@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     # --- HTTP ---
     http_timeout: float = 15.0
 
+    # --- Persistenza ---
+    # SQLite per iniziare; in produzione PostgreSQL via env, es.
+    #   TT_DATABASE_URL=postgresql+psycopg://user:pass@host:5432/transito
+    database_url: str = "sqlite:///./transito.db"
+    db_echo: bool = False
+
+    # --- Cache ---
+    # Vuoto → cache in-memory (sviluppo). In produzione: redis://host:6379/0
+    redis_url: str = ""
+
     # --- Geografia scioperi rilevanti per Torino ---
     strike_regions: tuple[str, ...] = ("piemonte", "torino")
     # Settori/rilevanze considerati "nazionali" → sempre inclusi per il TPL.

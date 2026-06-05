@@ -26,6 +26,15 @@ ruff check . && ruff format .
 Tutti i dati provengono dai feed GTT (CC BY 4.0 — "Città di Torino / GTT") e dal
 registro scioperi MIT. Vedi `../docs/DATA_SOURCES.md`.
 
+## Utenti, preferiti, sottoscrizioni (M2)
+
+Identità MVP: device anonimo. Si registra con `POST /me/devices` e poi ci si
+identifica con l'header `X-Device-Id` nelle altre chiamate `/me/*`.
+
+- `POST /me/devices` — registra device `{platform, token}` (idempotente sul token)
+- `GET|POST /me/favorites` + `DELETE /me/favorites/{id}` — preferiti `{type: stop|line, ref}`
+- `GET|POST /me/subscriptions` + `DELETE /me/subscriptions/{id}` — alert `{kind: imminent|strike, ...}`
+
 ## Infra & persistenza (M1)
 
 Stack locale (Postgres + Redis) via docker-compose:

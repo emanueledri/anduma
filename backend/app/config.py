@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     # Intervallo con cui svuotare la coda del dispatcher e inviare le push.
     push_interval_s: int = 10
 
+    # --- WebSocket mappa ---
+    # Ogni quanto spingere le posizioni dei mezzi (legge dalla cache RT condivisa).
+    ws_interval_s: float = 4.0
+    # Tetto di connessioni WS simultanee (backpressure).
+    ws_max_connections: int = 500
+
     # --- Geografia scioperi rilevanti per Torino ---
     strike_regions: tuple[str, ...] = ("piemonte", "torino")
     # Settori/rilevanze considerati "nazionali" → sempre inclusi per il TPL.

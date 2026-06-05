@@ -17,7 +17,7 @@ di una linea a una fermata e per gli **scioperi** che toccano Torino/Piemonte.
 | **M0** | Fondamenta backend read-only (linee, fermate, arrivi, mezzi, avvisi) | ✅ |
 | **M1** | Infra & persistenza (Postgres, Redis, migrazioni Alembic) | ✅ |
 | **M2** | Utenti, preferiti, sottoscrizioni (`/me/*`, device anonimo) | ✅ |
-| M3 | Motore alert + scheduler | ⬜ |
+| **M3** | Motore alert + scheduler (APScheduler, dedup idempotente) | ✅ |
 | M4 | Push FCM/APNs | ⬜ |
 | M5 | WebSocket mappa | ⬜ |
 | M6–M7 | Client Flutter | ⬜ |

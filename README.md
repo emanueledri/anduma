@@ -19,7 +19,7 @@ di una linea a una fermata e per gli **scioperi** che toccano Torino/Piemonte.
 | **M2** | Utenti, preferiti, sottoscrizioni (`/me/*`, device anonimo) | ✅ |
 | **M3** | Motore alert + scheduler (APScheduler, dedup idempotente) | ✅ |
 | **M4** | Push FCM/APNs (Firebase Admin SDK, cleanup token) | ✅ * |
-| M5 | WebSocket mappa | ⬜ |
+| **M5** | WebSocket mappa (`WS /ws/lines/{line}`, cache RT condivisa) | ✅ |
 | M6–M7 | Client Flutter | ⬜ |
 | M8 | Distribuzione | ⬜ |
 

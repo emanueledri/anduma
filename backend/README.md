@@ -22,6 +22,7 @@ ruff check . && ruff format .
 - `GET /stops/{stop_id}/arrivals?line=`
 - `GET /lines/{line}/vehicles`
 - `GET /alerts?line=`
+- `WS /ws/lines/{line}` — posizioni live in streaming (M5)
 
 Tutti i dati provengono dai feed GTT (CC BY 4.0 — "Città di Torino / GTT") e dal
 registro scioperi MIT. Vedi `../docs/DATA_SOURCES.md`.
@@ -99,3 +100,24 @@ alembic revision --autogenerate -m "descrizione"   # nuova migrazione dai modell
 ```
 
 `GET /health` riporta `db` (SELECT 1) e `cache` (`memory` | `redis` | `redis-down`).
+
+## WebSocket mappa (M5)
+
+`WS /ws/lines/{line}` spinge le posizioni dei mezzi della linea ogni ~3–5 s,
+leggendo dalla **cache RT condivisa** (un solo polling centralizzato, non un fetch
+per connessione). Ogni messaggio ha lo **stesso schema** di `GET /lines/{line}/vehicles`:
+
+```json
+{ "line": "10", "count": 7, "vehicles": [ { "vehicle_id", "lat", "lon", "bearing", "speed", "ts", ... } ] }
+```
+
+- **Backpressure**: tetto di connessioni simultanee (`TT_WS_MAX_CONNECTIONS`,
+  default 500); oltre il limite il server chiude con codice `1013` (*Try Again Later*).
+- **Cleanup**: alla disconnessione la connessione viene rimossa dal registro.
+- **Fallback**: se il WebSocket non è disponibile, il client fa **polling REST** di
+  `GET /lines/{line}/vehicles` (identico payload).
+
+```bash
+export TT_WS_INTERVAL_S=4         # cadenza di push (default 4s)
+export TT_WS_MAX_CONNECTIONS=500
+```

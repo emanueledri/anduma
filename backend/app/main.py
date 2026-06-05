@@ -6,9 +6,11 @@ client parla esclusivamente con questa API.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
 
 from . import realtime, scioperi
 from .alerts import InProcessDispatcher, build_scheduler
@@ -26,6 +28,7 @@ from .models import (
 )
 from .provider import DataProvider, LiveProvider
 from .push import build_push_service, make_push_processor
+from .ws import ConnectionManager
 
 ATTRIBUTION = "Dati: Città di Torino / GTT (CC BY 4.0); scioperi MIT; mappa © OpenStreetMap"
 
@@ -37,6 +40,8 @@ async def lifespan(app: FastAPI):
     app.state.provider = provider
     app.state.dispatcher = InProcessDispatcher()
     app.state.scheduler = None
+    app.state.ws_manager = ConnectionManager(settings.ws_max_connections)
+    app.state.ws_interval_s = settings.ws_interval_s
     # Pre-carica il GTFS statico (tollerante a rete assente).
     with suppress(Exception):
         provider.gtfs()
@@ -129,15 +134,50 @@ def stop_arrivals(
     )
 
 
+def _vehicles_response(provider: DataProvider, line: str) -> VehiclesResponse:
+    """Posizioni dei mezzi di una linea dalla cache RT condivisa (REST e WS)."""
+    gtfs = provider.gtfs()
+    feed = realtime.parse_feed(provider.vehicle_positions_bytes())
+    vehicles = realtime.vehicles_for_line(feed, gtfs, line)
+    return VehiclesResponse(line=line, count=len(vehicles), vehicles=vehicles)
+
+
 @app.get("/lines/{line}/vehicles", response_model=VehiclesResponse)
 def line_vehicles(
     line: str,
     provider: DataProvider = Depends(get_provider),
 ) -> VehiclesResponse:
-    gtfs = provider.gtfs()
-    feed = realtime.parse_feed(provider.vehicle_positions_bytes())
-    vehicles = realtime.vehicles_for_line(feed, gtfs, line)
-    return VehiclesResponse(line=line, count=len(vehicles), vehicles=vehicles)
+    return _vehicles_response(provider, line)
+
+
+@app.websocket("/ws/lines/{line}")
+async def ws_line_vehicles(
+    websocket: WebSocket,
+    line: str,
+    provider: DataProvider = Depends(get_provider),
+) -> None:
+    """Spinge le posizioni della linea ogni ~3–5 s dalla cache RT condivisa.
+
+    Fallback se il WS non è disponibile: polling REST di
+    ``GET /lines/{line}/vehicles`` (stesso schema del messaggio).
+    """
+    await websocket.accept()
+    manager: ConnectionManager = websocket.app.state.ws_manager
+    if not manager.register(websocket):
+        # Tetto connessioni raggiunto: chiudi invitando a riprovare.
+        await websocket.close(code=1013)  # Try Again Later
+        return
+    interval = getattr(websocket.app.state, "ws_interval_s", 4.0)
+    try:
+        while True:
+            # Letture potenzialmente bloccanti (cache/parse) fuori dall'event loop.
+            resp = await run_in_threadpool(_vehicles_response, provider, line)
+            await websocket.send_json(resp.model_dump())
+            await asyncio.sleep(interval)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        manager.unregister(websocket)
 
 
 @app.get("/alerts", response_model=AlertsResponse)

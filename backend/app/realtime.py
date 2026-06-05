@@ -40,8 +40,14 @@ def _translated(ts: gtfs_realtime_pb2.TranslatedString) -> str | None:
 def vehicles_for_line(
     feed: gtfs_realtime_pb2.FeedMessage, gtfs: GtfsStatic, line: str
 ) -> list[Vehicle]:
-    """Posizioni dei mezzi di una linea (filtra per i suoi ``route_id``)."""
+    """Posizioni dei mezzi di una linea (filtra per i suoi ``route_id``).
+
+    Se il GTFS statico non è caricato non possiamo mappare le linee: si degrada
+    restituendo tutti i mezzi. Se invece è caricato, una linea ignota dà lista
+    vuota (``wanted`` vuoto → nessun match).
+    """
     wanted = set(gtfs.route_ids_for_line(line))
+    gtfs_loaded = bool(gtfs.routes)
     out: list[Vehicle] = []
     for entity in feed.entity:
         if not entity.HasField("vehicle"):
@@ -50,7 +56,7 @@ def vehicles_for_line(
         route_id = vp.trip.route_id if vp.HasField("trip") else None
         trip_id = vp.trip.trip_id if vp.HasField("trip") else None
         # Filtro linea: per route_id (preferito) o, in mancanza, per trip_id→route.
-        if wanted:
+        if gtfs_loaded:
             line_via_trip = gtfs.short_name_for_trip(trip_id)
             if route_id not in wanted and line_via_trip != line:
                 continue

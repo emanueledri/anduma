@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     imminent_interval_s: int = 15
     strike_interval_s: int = 3600
 
+    # --- Push (FCM/APNs via Firebase Admin SDK) ---
+    # Abilitato solo quando c'è una service account key valida (config esterna).
+    fcm_enabled: bool = False
+    fcm_credentials_file: str = "secrets/firebase-admin.json"
+    # Intervallo con cui svuotare la coda del dispatcher e inviare le push.
+    push_interval_s: int = 10
+
     # --- Geografia scioperi rilevanti per Torino ---
     strike_regions: tuple[str, ...] = ("piemonte", "torino")
     # Settori/rilevanze considerati "nazionali" → sempre inclusi per il TPL.

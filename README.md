@@ -18,12 +18,14 @@ di una linea a una fermata e per gli **scioperi** che toccano Torino/Piemonte.
 | **M1** | Infra & persistenza (Postgres, Redis, migrazioni Alembic) | ✅ |
 | **M2** | Utenti, preferiti, sottoscrizioni (`/me/*`, device anonimo) | ✅ |
 | **M3** | Motore alert + scheduler (APScheduler, dedup idempotente) | ✅ |
-| M4 | Push FCM/APNs | ⬜ |
+| **M4** | Push FCM/APNs (Firebase Admin SDK, cleanup token) | ✅ * |
 | M5 | WebSocket mappa | ⬜ |
 | M6–M7 | Client Flutter | ⬜ |
 | M8 | Distribuzione | ⬜ |
 
 La roadmap dettagliata è in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+\* M4: codice e test (mock) completi; l'invio reale richiede una service account
+Firebase (config esterna) e un device token vero (dall'app, M7).
 
 ## Architettura
 

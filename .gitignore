@@ -21,6 +21,12 @@ env/
 *.local
 backend/.cache/
 *.db
+# Service account keys / credenziali (MAI nel repo, che è pubblico)
+# Ignora tutto il contenuto di secrets/ TRANNE il README di istruzioni.
+backend/secrets/*
+!backend/secrets/README.md
+*.serviceaccount.json
+firebase-admin*.json
 
 # OS
 .DS_Store

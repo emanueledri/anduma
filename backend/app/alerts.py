@@ -228,9 +228,13 @@ def build_scheduler(
     dispatcher: Dispatcher,
     session_factory: sessionmaker[Session],
     settings: Settings | None = None,
-    job_runner: Callable | None = None,
+    push_processor: Callable[[], object] | None = None,
 ):
-    """Crea (senza avviare) un BackgroundScheduler con i job imminent e strike."""
+    """Crea (senza avviare) un BackgroundScheduler con i job alert.
+
+    Se ``push_processor`` è fornito (callable a zero argomenti), aggiunge anche un
+    job ``push`` che svuota la coda del dispatcher e invia (vedi M4).
+    """
     from apscheduler.schedulers.background import BackgroundScheduler
 
     settings = settings or get_settings()
@@ -253,6 +257,15 @@ def build_scheduler(
         max_instances=1,
         coalesce=True,
     )
+    if push_processor is not None:
+        scheduler.add_job(
+            push_processor,
+            "interval",
+            seconds=settings.push_interval_s,
+            id="push",
+            max_instances=1,
+            coalesce=True,
+        )
     return scheduler
 
 

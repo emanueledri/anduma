@@ -25,6 +25,7 @@ from .models import (
     VehiclesResponse,
 )
 from .provider import DataProvider, LiveProvider
+from .push import build_push_service, make_push_processor
 
 ATTRIBUTION = "Dati: Città di Torino / GTT (CC BY 4.0); scioperi MIT; mappa © OpenStreetMap"
 
@@ -41,7 +42,15 @@ async def lifespan(app: FastAPI):
         provider.gtfs()
     # Scheduler alert: disattivato di default (non fa polling finché non abilitato).
     if settings.scheduler_enabled:
-        scheduler = build_scheduler(provider, app.state.dispatcher, SessionLocal, settings)
+        push_service = build_push_service(settings)  # None se FCM non abilitato
+        push_processor = (
+            make_push_processor(push_service, app.state.dispatcher, SessionLocal)
+            if push_service is not None
+            else None
+        )
+        scheduler = build_scheduler(
+            provider, app.state.dispatcher, SessionLocal, settings, push_processor=push_processor
+        )
         scheduler.start()
         app.state.scheduler = scheduler
     try:

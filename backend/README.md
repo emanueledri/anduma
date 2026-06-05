@@ -55,6 +55,25 @@ export TT_IMMINENT_INTERVAL_S=15
 export TT_STRIKE_INTERVAL_S=3600
 ```
 
+## Push FCM/APNs (M4)
+
+Il `PushService` svuota la coda del dispatcher (M3), risolve il `device_id` nel
+token FCM, invia via **Firebase Admin SDK**, e in caso di token non più valido
+rimuove il device (cleanup, cascade su preferiti/sottoscrizioni). APNs è gestito
+da FCM dietro le quinte.
+
+Richiede una **service account** Firebase (config esterna, vedi `secrets/README.md`):
+
+```bash
+export TT_FCM_ENABLED=true
+export TT_FCM_CREDENTIALS_FILE=secrets/firebase-admin.json
+export TT_SCHEDULER_ENABLED=true   # il job 'push' gira solo con lo scheduler attivo
+export TT_PUSH_INTERVAL_S=10
+```
+
+Senza chiave (`TT_FCM_ENABLED=false`, default) il backend funziona normalmente:
+gli alert vengono solo accodati, non inviati. I test usano un sender fake.
+
 ## Infra & persistenza (M1)
 
 Stack locale (Postgres + Redis) via docker-compose:

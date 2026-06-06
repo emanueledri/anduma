@@ -10,7 +10,9 @@ testabili da fixture; il fetch di rete con TTL sta in ``FeedFetcher``.
 
 from __future__ import annotations
 
+import datetime as dt
 import time
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import HTTPException
@@ -86,8 +88,14 @@ def arrivals_for_stop(
     line: str | None = None,
     now: float | None = None,
 ) -> list[Arrival]:
-    """Arrivi previsti alla fermata dai ``TripUpdate`` (ordinati per ETA)."""
+    """Arrivi previsti alla fermata dai ``TripUpdate`` (ordinati per ETA).
+
+    GTT indica la fermata con ``stop_sequence`` (non ``stop_id``) e a volte solo
+    col ``delay``: si risolve la sequenza in ``stop_id`` via l'indice orari del
+    GTFS statico e si calcola l'ETA da orario assoluto o da programmato + delay.
+    """
     now_ts = int(now if now is not None else time.time())
+    base_ts = _schedule_base_ts(gtfs.schedule_date)
     out: list[Arrival] = []
     for entity in feed.entity:
         if not entity.HasField("trip_update"):
@@ -100,9 +108,16 @@ def arrivals_for_stop(
             continue
 
         for stu in tu.stop_time_update:
-            if stu.stop_id != stop_id:
+            # Stop diretto se presente, altrimenti risolto da stop_sequence.
+            sid = stu.stop_id if (stu.HasField("stop_id") and stu.stop_id) else None
+            sched_secs: int | None = None
+            if sid is None and stu.HasField("stop_sequence"):
+                resolved = gtfs.resolve_seq(trip_id, stu.stop_sequence)
+                if resolved is not None:
+                    sid, sched_secs = resolved
+            if sid != stop_id:
                 continue
-            sched_ts = _stop_time_ts(stu)
+            sched_ts = _stop_time_ts(stu, base_ts, sched_secs)
             if sched_ts is None:
                 continue
             eta = sched_ts - now_ts
@@ -122,12 +137,40 @@ def arrivals_for_stop(
     return out
 
 
-def _stop_time_ts(stu: gtfs_realtime_pb2.TripUpdate.StopTimeUpdate) -> int | None:
-    """``arrival.time`` se presente, altrimenti ``departure.time``."""
-    if stu.HasField("arrival") and stu.arrival.HasField("time"):
-        return stu.arrival.time
-    if stu.HasField("departure") and stu.departure.HasField("time"):
-        return stu.departure.time
+_TZ = ZoneInfo("Europe/Rome")
+
+
+def _schedule_base_ts(service_date: dt.date | None) -> float | None:
+    """Epoch della mezzanotte locale della data di servizio (base per il delay)."""
+    if service_date is None:
+        return None
+    midnight = dt.datetime(service_date.year, service_date.month, service_date.day, tzinfo=_TZ)
+    return midnight.timestamp()
+
+
+def _event_ts(event, base_ts: float | None, sched_secs: int | None) -> int | None:
+    """Timestamp d'arrivo: assoluto se presente, altrimenti programmato + delay."""
+    if event.HasField("time") and event.time > 0:
+        return event.time
+    if event.HasField("delay") and base_ts is not None and sched_secs is not None:
+        return int(base_ts) + sched_secs + event.delay
+    return None
+
+
+def _stop_time_ts(
+    stu: gtfs_realtime_pb2.TripUpdate.StopTimeUpdate,
+    base_ts: float | None = None,
+    sched_secs: int | None = None,
+) -> int | None:
+    """Arrivo (o, in mancanza, partenza): orario assoluto o programmato + delay."""
+    if stu.HasField("arrival"):
+        ts = _event_ts(stu.arrival, base_ts, sched_secs)
+        if ts is not None:
+            return ts
+    if stu.HasField("departure"):
+        ts = _event_ts(stu.departure, base_ts, sched_secs)
+        if ts is not None:
+            return ts
     return None
 
 

@@ -62,6 +62,40 @@ def test_arrivals_drop_past_departures(gtfs: GtfsStatic, trip_updates_bytes: byt
     assert realtime.arrivals_for_stop(feed, gtfs, "350", now=FUTURE_TS + 10_000) == []
 
 
+def test_arrivals_resolve_stop_sequence_and_delay():
+    """Feed in stile GTT: niente stop_id, solo stop_sequence + delay → risolto."""
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    from google.transit import gtfs_realtime_pb2
+
+    # GtfsStatic isolato: T1 → route R10A ("10"); indice orari seq 5 → fermata 350.
+    gtfs = GtfsStatic(
+        routes={"R10A": {"route_id": "R10A", "route_short_name": "10"}},
+        short_name_to_route_ids={"10": ["R10A"]},
+        trips={"T1": {"trip_id": "T1", "route_id": "R10A", "trip_headsign": "Test"}},
+        schedule={"T1": {5: ("350", 12 * 3600)}},
+        schedule_date=dt.date(2030, 1, 1),
+    )
+    base = dt.datetime(2030, 1, 1, tzinfo=ZoneInfo("Europe/Rome")).timestamp()
+
+    feed = gtfs_realtime_pb2.FeedMessage()
+    e = feed.entity.add()
+    e.id = "tu1"
+    tu = e.trip_update
+    tu.trip.trip_id = "T1"  # route_id assente, come in GTT → risolto via trip
+    stu = tu.stop_time_update.add()
+    stu.stop_sequence = 5  # nessuno stop_id
+    stu.arrival.delay = 120  # 2 min di ritardo sul programmato
+
+    # now = 11:55 locale → arrivo previsto 12:02 → ~7 min.
+    now = base + 12 * 3600 - 5 * 60
+    arrivals = realtime.arrivals_for_stop(feed, gtfs, "350", now=now)
+    assert len(arrivals) == 1
+    assert arrivals[0].line == "10"  # T1 → R10A → "10"
+    assert arrivals[0].eta_seconds == 120 + 5 * 60  # delay + (12:00 - 11:55)
+
+
 def test_service_alerts(gtfs: GtfsStatic, alerts_bytes: bytes):
     feed = realtime.parse_feed(alerts_bytes)
     all_alerts = realtime.service_alerts(feed, gtfs)

@@ -12,7 +12,9 @@ download di rete sta in ``download_zip_bytes`` ed è isolato.
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import io
+import sys
 import zipfile
 from dataclasses import dataclass, field
 
@@ -20,6 +22,8 @@ import httpx
 
 from .config import Settings, get_settings
 from .models import Line, Stop
+
+_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
 
 def _read_csv(zf: zipfile.ZipFile, name: str) -> list[dict[str, str]]:
@@ -30,6 +34,43 @@ def _read_csv(zf: zipfile.ZipFile, name: str) -> list[dict[str, str]]:
         # GTFS è UTF-8 (a volte con BOM): utf-8-sig pulisce il BOM.
         text = io.TextIOWrapper(fh, encoding="utf-8-sig", newline="")
         return list(csv.DictReader(text))
+
+
+def _hms_to_secs(value: str) -> int | None:
+    """'HH:MM:SS' → secondi dalla mezzanotte (gestisce ore ≥ 24)."""
+    try:
+        h, m, s = value.split(":")
+        return int(h) * 3600 + int(m) * 60 + int(s)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _active_services(zf: zipfile.ZipFile, on_date: dt.date) -> set[str]:
+    """Service_id attivi in una data, da ``calendar.txt`` + ``calendar_dates.txt``."""
+    ymd = on_date.strftime("%Y%m%d")
+    weekday = _WEEKDAYS[on_date.weekday()]
+    active: set[str] = set()
+    for row in _read_csv(zf, "calendar.txt"):
+        sid = (row.get("service_id") or "").strip()
+        if not sid:
+            continue
+        start = (row.get("start_date") or "").strip()
+        end = (row.get("end_date") or "").strip()
+        if start and end and not (start <= ymd <= end):
+            continue
+        if (row.get(weekday) or "0").strip() == "1":
+            active.add(sid)
+    # Eccezioni: 1 = servizio aggiunto, 2 = servizio rimosso.
+    for row in _read_csv(zf, "calendar_dates.txt"):
+        if (row.get("date") or "").strip() != ymd:
+            continue
+        sid = (row.get("service_id") or "").strip()
+        exc = (row.get("exception_type") or "").strip()
+        if exc == "1":
+            active.add(sid)
+        elif exc == "2":
+            active.discard(sid)
+    return active
 
 
 @dataclass
@@ -44,12 +85,23 @@ class GtfsStatic:
     stops: dict[str, dict[str, str]] = field(default_factory=dict)
     # trip_id -> {route_id, headsign}
     trips: dict[str, dict[str, str]] = field(default_factory=dict)
+    # Orari programmati delle SOLE corse attive nella data: serve perché i feed
+    # RT di GTT indicano la fermata con stop_sequence (non stop_id) e spesso solo
+    # col delay. trip_id -> {stop_sequence: (stop_id, arrival_secs|None)}
+    schedule: dict[str, dict[int, tuple[str, int | None]]] = field(default_factory=dict)
+    # Data di servizio per cui è costruito ``schedule`` (base per il delay).
+    schedule_date: dt.date | None = None
 
     # ------------------------------------------------------------------ build
     @classmethod
-    def from_zip_bytes(cls, data: bytes) -> GtfsStatic:
-        """Costruisce lo snapshot da un GTFS ZIP (bytes)."""
+    def from_zip_bytes(cls, data: bytes, schedule_for_date: dt.date | None = None) -> GtfsStatic:
+        """Costruisce lo snapshot da un GTFS ZIP (bytes).
+
+        Se ``schedule_for_date`` è fornita, costruisce anche l'indice orari per le
+        sole corse in servizio quel giorno (così resta leggero: ~1/7 del totale).
+        """
         gtfs = cls()
+        gtfs.schedule_date = schedule_for_date
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             for row in _read_csv(zf, "routes.txt"):
                 route_id = row.get("route_id", "").strip()
@@ -69,7 +121,50 @@ class GtfsStatic:
                 trip_id = row.get("trip_id", "").strip()
                 if trip_id:
                     gtfs.trips[trip_id] = row
+
+            if schedule_for_date is not None:
+                gtfs._build_schedule(zf, schedule_for_date)
         return gtfs
+
+    def _build_schedule(self, zf: zipfile.ZipFile, on_date: dt.date) -> None:
+        """Indicizza ``stop_times.txt`` per le corse attive in ``on_date`` (streaming)."""
+        if "stop_times.txt" not in zf.namelist():
+            return
+        services = _active_services(zf, on_date)
+        active_trips = {
+            tid
+            for tid, row in self.trips.items()
+            if (row.get("service_id") or "").strip() in services
+        }
+        if not active_trips:
+            return
+        with zf.open("stop_times.txt") as fh:
+            reader = csv.reader(io.TextIOWrapper(fh, encoding="utf-8-sig"))
+            header = next(reader, None)
+            if not header:
+                return
+            idx = {name: i for i, name in enumerate(header)}
+            i_trip, i_arr = idx.get("trip_id"), idx.get("arrival_time")
+            i_stop, i_seq = idx.get("stop_id"), idx.get("stop_sequence")
+            if None in (i_trip, i_stop, i_seq):
+                return
+            for r in reader:
+                tid = r[i_trip]
+                if tid not in active_trips:
+                    continue
+                try:
+                    seq = int(r[i_seq])
+                except (ValueError, IndexError):
+                    continue
+                sid = sys.intern(r[i_stop])
+                secs = _hms_to_secs(r[i_arr]) if i_arr is not None else None
+                self.schedule.setdefault(sys.intern(tid), {})[seq] = (sid, secs)
+
+    def resolve_seq(self, trip_id: str | None, stop_sequence: int) -> tuple[str, int | None] | None:
+        """``(stop_id, arrival_secs)`` per (corsa, sequenza) dall'indice orari."""
+        if not trip_id:
+            return None
+        return self.schedule.get(trip_id, {}).get(stop_sequence)
 
     # --------------------------------------------------------------- lookups
     def route_ids_for_line(self, short_name: str) -> list[str]:

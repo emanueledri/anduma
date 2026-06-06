@@ -7,8 +7,10 @@ inietta un fake che legge le fixture, così nessun test tocca la rete.
 
 from __future__ import annotations
 
+import datetime as dt
 import time
 from typing import Protocol
+from zoneinfo import ZoneInfo
 
 from .cache import Cache, get_cache
 from .config import Settings, get_settings
@@ -43,7 +45,8 @@ class LiveProvider:
             return self._gtfs
         try:
             data = download_zip_bytes(self._settings)
-            self._gtfs = GtfsStatic.from_zip_bytes(data)
+            today = dt.datetime.now(ZoneInfo("Europe/Rome")).date()
+            self._gtfs = GtfsStatic.from_zip_bytes(data, schedule_for_date=today)
             self._gtfs_expires_at = now + self._settings.ttl_gtfs_static
         except Exception:
             # Sorgente irraggiungibile: mantieni lo snapshot precedente (o vuoto).

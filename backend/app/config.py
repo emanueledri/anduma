@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     # --- GTFS statico (orari, fermate, percorsi) ---
     # Trappola nota: il link diretto di download dello ZIP può cambiare (404).
     # Se cambia, aggiornare QUI (o via env TT_GTFS_STATIC_URL), non nel codice.
-    gtfs_static_url: str = "http://aperto.comune.torino.it/dataset/feed-gtfs-trasporti-gtt"
+    # Link diretto allo ZIP (verificato). Pagina del dataset:
+    # https://aperto.comune.torino.it/dataset/feed-gtfs-trasporti-gtt
+    gtfs_static_url: str = "https://www.gtt.to.it/open_data/gtt_gtfs.zip"
 
     # --- GTFS-Realtime (protobuf binario, NON JSON) ---
     rt_vehicle_positions_url: str = (

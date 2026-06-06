@@ -2,11 +2,39 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 
-from app.scioperi import filter_for_torino, is_relevant_for_torino, parse_strikes_csv
+from app.models import Strike
+from app.scioperi import (
+    filter_for_torino,
+    filter_upcoming,
+    is_active_strike,
+    is_relevant_for_torino,
+    parse_strikes_csv,
+)
 
 FIX = Path(__file__).parent / "fixtures"
+
+
+def test_filter_upcoming_drops_past_strikes():
+    today = dt.date(2026, 6, 6)
+    strikes = [
+        Strike(start_date="2014-01-08", end_date="2014-01-08"),  # passato
+        Strike(start_date="2026-06-10", end_date="2026-06-10"),  # futuro
+        Strike(start_date="2026-06-06", end_date="2026-06-06"),  # oggi
+        Strike(start_date="data ignota", end_date=None),  # non parsabile → tenuto
+    ]
+    kept = filter_upcoming(strikes, today=today)
+    assert len(kept) == 3
+    assert all(s.start_date != "2014-01-08" for s in kept)
+
+
+def test_is_active_strike_date_formats():
+    today = dt.date(2026, 6, 6)
+    assert is_active_strike(Strike(start_date="10/06/2026"), today)  # DD/MM/YYYY
+    assert not is_active_strike(Strike(start_date="01/01/2020"), today)
+    assert is_active_strike(Strike(start_date=None), today)  # difensivo
 
 
 def test_parse_canonical_csv(strikes_csv: str):

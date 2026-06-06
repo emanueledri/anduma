@@ -188,5 +188,7 @@ def alerts(
     gtfs = provider.gtfs()
     feed = realtime.parse_feed(provider.alerts_bytes())
     service = realtime.service_alerts(feed, gtfs, line=line)
-    strikes = scioperi.filter_for_torino(scioperi.parse_strikes_csv(provider.strikes_csv()))
+    strikes = scioperi.filter_upcoming(
+        scioperi.filter_for_torino(scioperi.parse_strikes_csv(provider.strikes_csv()))
+    )
     return AlertsResponse(service_alerts=service, strikes=strikes)

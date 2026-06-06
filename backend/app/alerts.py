@@ -33,7 +33,7 @@ from .db import NotifiedEvent, Subscription
 from .gtfs_static import GtfsStatic
 from .models import Strike
 from .realtime import arrivals_for_stop, parse_feed
-from .scioperi import filter_for_torino, parse_strikes_csv
+from .scioperi import filter_for_torino, filter_upcoming, parse_strikes_csv
 
 # Buffer oltre l'ETA stimato prima che la dedup scada (il mezzo è passato).
 _IMMINENT_TTL_BUFFER_S = 120
@@ -216,7 +216,7 @@ def run_imminent(provider, dispatcher: Dispatcher, session_factory: sessionmaker
 def run_strikes(provider, dispatcher: Dispatcher, session_factory: sessionmaker[Session]) -> int:
     """Job strike: legge il registro MIT dal provider e valuta (tollerante a errori)."""
     try:
-        strikes = filter_for_torino(parse_strikes_csv(provider.strikes_csv()))
+        strikes = filter_upcoming(filter_for_torino(parse_strikes_csv(provider.strikes_csv())))
     except Exception:
         return 0
     with session_factory() as session:

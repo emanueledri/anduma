@@ -8,6 +8,7 @@ con area Piemonte/Torino **e** quelli nazionali/generali del TPL.
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import io
 
 import httpx
@@ -103,6 +104,41 @@ def filter_for_torino(strikes: list[Strike], settings: Settings | None = None) -
     return [s for s in strikes if is_relevant_for_torino(s, settings)]
 
 
+_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y")
+
+
+def _parse_date(value: str | None) -> dt.date | None:
+    """Parsa una data in vari formati comuni; None se non riconoscibile."""
+    if not value:
+        return None
+    s = value.strip()[:10]
+    for fmt in _DATE_FORMATS:
+        try:
+            return dt.datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def is_active_strike(strike: Strike, today: dt.date | None = None) -> bool:
+    """True se lo sciopero è in corso o futuro (la fine, o l'inizio, è ≥ oggi).
+
+    Il registro MIT è onnicomprensivo (anche scioperi di anni fa): qui teniamo
+    solo quelli ancora rilevanti. Se le date non sono parsabili, NON scartiamo
+    (difensivo: meglio mostrare in più che nascondere uno sciopero reale).
+    """
+    today = today or dt.date.today()
+    ref = _parse_date(strike.end_date) or _parse_date(strike.start_date)
+    if ref is None:
+        return True
+    return ref >= today
+
+
+def filter_upcoming(strikes: list[Strike], today: dt.date | None = None) -> list[Strike]:
+    """Tiene solo gli scioperi in corso o futuri."""
+    return [s for s in strikes if is_active_strike(s, today)]
+
+
 def download_strikes_csv(settings: Settings | None = None) -> str:
     """Scarica il CSV scioperi (rete). Isolato per testabilità."""
     settings = settings or get_settings()
@@ -116,5 +152,7 @@ __all__ = [
     "parse_strikes_csv",
     "is_relevant_for_torino",
     "filter_for_torino",
+    "is_active_strike",
+    "filter_upcoming",
     "download_strikes_csv",
 ]

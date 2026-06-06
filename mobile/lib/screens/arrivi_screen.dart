@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
+import '../api/favorites_store.dart';
 import '../api/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
@@ -13,8 +14,9 @@ import '../widgets/pulsing_dot.dart';
 import '../widgets/state_views.dart';
 
 class ArriviScreen extends StatefulWidget {
-  const ArriviScreen({super.key, required this.api});
+  const ArriviScreen({super.key, required this.api, required this.favs});
   final ApiClient api;
+  final FavoritesStore favs;
 
   @override
   State<ArriviScreen> createState() => _ArriviScreenState();
@@ -257,44 +259,66 @@ class _ArriviScreenState extends State<ArriviScreen> {
     );
   }
 
-  Widget _stopHeader(TTColors c, Stop stop) => Container(
-        margin: const EdgeInsets.fromLTRB(TTSpace.x4, 0, TTSpace.x4, TTSpace.x3),
-        padding: const EdgeInsets.all(TTSpace.x4),
-        decoration: BoxDecoration(
-          color: c.surface,
-          border: Border.all(color: c.border),
-          borderRadius: BorderRadius.circular(TTRadius.lg),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.place, size: 14, color: c.inkMuted),
-                      const SizedBox(width: 6),
-                      Text('FERMATA ${stop.code ?? stop.stopId}',
-                          style: TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w600, color: c.inkMuted, letterSpacing: 0.6)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(stop.name,
-                      style: TextStyle(
-                          fontSize: 22, fontWeight: FontWeight.w800, color: c.ink, letterSpacing: -0.4)),
-                ],
-              ),
+  Widget _stopHeader(TTColors c, Stop stop) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(TTSpace.x4, 0, TTSpace.x4, TTSpace.x3),
+      padding: const EdgeInsets.all(TTSpace.x4),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(TTRadius.lg),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.place, size: 14, color: c.inkMuted),
+                    const SizedBox(width: 6),
+                    Text('FERMATA ${stop.code ?? stop.stopId}',
+                        style: TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w600, color: c.inkMuted, letterSpacing: 0.6)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(stop.name,
+                    style: TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.w800, color: c.ink, letterSpacing: -0.4)),
+              ],
             ),
-            IconButton(
-              onPressed: _clearStop,
-              icon: Icon(Icons.close, color: c.inkMuted),
-              tooltip: 'Chiudi',
-            ),
-          ],
-        ),
-      );
+          ),
+          ListenableBuilder(
+            listenable: widget.favs,
+            builder: (context, _) {
+              final starred = widget.favs.has('stop', stop.stopId);
+              return IconButton(
+                icon: Icon(
+                  starred ? Icons.star : Icons.star_border,
+                  color: starred ? c.accent : c.inkMuted,
+                ),
+                tooltip: starred ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti',
+                onPressed: () {
+                  if (starred) {
+                    widget.favs.remove('stop', stop.stopId);
+                  } else {
+                    widget.favs.add(LocalFavorite(type: 'stop', ref: stop.stopId, name: stop.name));
+                  }
+                },
+              );
+            },
+          ),
+          IconButton(
+            onPressed: _clearStop,
+            icon: Icon(Icons.close, color: c.inkMuted),
+            tooltip: 'Chiudi',
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _filterRow(TTColors c, List<String> lines) => SizedBox(
         height: 32,

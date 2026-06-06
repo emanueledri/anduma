@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../api/api_client.dart';
+import '../api/favorites_store.dart';
 import '../api/models.dart';
 import '../api/realtime.dart';
 import '../theme/tokens.dart';
@@ -14,8 +15,9 @@ import '../widgets/vehicle_marker.dart';
 const _torino = LatLng(45.0703, 7.6869);
 
 class MappaScreen extends StatefulWidget {
-  const MappaScreen({super.key, required this.api});
+  const MappaScreen({super.key, required this.api, required this.favs});
   final ApiClient api;
+  final FavoritesStore favs;
 
   @override
   State<MappaScreen> createState() => _MappaScreenState();
@@ -156,6 +158,27 @@ class _MappaScreenState extends State<MappaScreen> {
                 onPressed: _openLinePicker,
                 style: TextButton.styleFrom(foregroundColor: c.primary),
                 child: const Text('Cambia', style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+              ListenableBuilder(
+                listenable: widget.favs,
+                builder: (context, _) {
+                  final starred = widget.favs.has('line', _line);
+                  return IconButton(
+                    icon: Icon(
+                      starred ? Icons.star : Icons.star_border,
+                      size: 22,
+                      color: starred ? c.accent : c.inkMuted,
+                    ),
+                    tooltip: starred ? 'Rimuovi dai preferiti' : 'Salva linea',
+                    onPressed: () {
+                      if (starred) {
+                        widget.favs.remove('line', _line);
+                      } else {
+                        widget.favs.add(LocalFavorite(type: 'line', ref: _line, name: 'Linea $_line'));
+                      }
+                    },
+                  );
+                },
               ),
             ],
           ),

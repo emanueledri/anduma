@@ -56,15 +56,23 @@ Spacchettare il prototipo `torino_transit_backend.py` nella struttura modulare.
 
 **Fatto quando**: un client di test riceve aggiornamenti periodici su una linea.
 
-## M6 — Client Flutter (MVP)
-- [ ] Progetto `mobile/` + client API tipizzato.
-- [ ] Schermata **Ricerca/Arrivi**: cerca fermata → lista arrivi con auto-refresh.
-- [ ] Schermata **Mappa**: `flutter_map` + tile OSM, marker mezzi animati via WS (fallback polling).
-- [ ] Schermata **Preferiti**: salva fermate/linee; "casa" coi prossimi passaggi.
-- [ ] Schermata **Avvisi**: avvisi GTT + scioperi.
-- [ ] Schermata **Informazioni/Fonti** coi crediti (CC BY GTT, MIT, OSM).
+## M6 — Client Flutter (MVP) ✅
+- [x] Progetto `mobile/` + client API tipizzato.
+- [x] Schermata **Ricerca/Arrivi**: cerca fermata → lista arrivi con auto-refresh.
+- [x] Schermata **Mappa**: `flutter_map` + tile OSM, marker mezzi animati via WS (fallback polling).
+- [x] Schermata **Preferiti**: `FavoritesStore` locale (SharedPreferences); salva fermate/linee con stella da Arrivi e Mappa; card con arrivi inline auto-refresh; swipe-to-dismiss.
+- [x] Schermata **Avvisi**: avvisi GTT + scioperi; pull-to-refresh corretto.
+- [x] Schermata **Informazioni/Fonti** coi crediti (CC BY GTT, MIT, OSM).
 
-**Fatto quando**: l'app gira su Android/iOS e usa solo la nostra API.
+**Validato**: `flutter analyze` 0 warning; `flutter build apk --debug` ok; app testata su
+emulatore Pixel 9 (Android 15, API 35); dati reali GTT caricati (205 avvisi, 1543 scioperi).
+
+Bug risolti durante il testing:
+- `setState(() => _future = next)` restituiva Future come callback value → cambiato in block body.
+- `_reload()` non era `async` → `RefreshIndicator` non aspettava il completamento.
+- `FeedFetcher._get()` non catturava `httpx.TransportError`/`HTTPStatusError` → crash 500 → ora 503.
+- URL feed GTT usavano `http://` → timeout silenzioso → corretti in `https://` (server HTTPS-only).
+- Aggiunto `User-Agent: Mozilla/5.0` al client httpx (alcuni endpoint GTT filtrano per UA).
 
 ## M7 — Client Flutter (alert) + rifinitura
 - [ ] Registrazione device token FCM + gestione permessi notifiche.

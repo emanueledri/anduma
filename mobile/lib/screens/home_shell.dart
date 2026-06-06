@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
+import '../api/favorites_store.dart';
 import '../theme/tokens.dart';
 import 'arrivi_screen.dart';
 import 'avvisi_screen.dart';
@@ -18,11 +19,19 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   final _api = ApiClient();
+  final _favs = FavoritesStore();
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _favs.load();
+  }
 
   @override
   void dispose() {
     _api.close();
+    _favs.dispose();
     super.dispose();
   }
 
@@ -30,9 +39,9 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final c = TTColors.of(context);
     final pages = [
-      ArriviScreen(api: _api),
-      MappaScreen(api: _api),
-      const PreferitiScreen(),
+      ArriviScreen(api: _api, favs: _favs),
+      MappaScreen(api: _api, favs: _favs),
+      PreferitiScreen(api: _api, favs: _favs),
       AvvisiScreen(api: _api),
     ];
     final titles = ['Arrivi', 'Mappa', 'Preferiti', 'Avvisi'];

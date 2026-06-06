@@ -24,10 +24,10 @@ class Settings(BaseSettings):
 
     # --- GTFS-Realtime (protobuf binario, NON JSON) ---
     rt_vehicle_positions_url: str = (
-        "http://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx"
+        "https://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx"
     )
-    rt_trip_updates_url: str = "http://percorsieorari.gtt.to.it/das_gtfsrt/trip_update.aspx"
-    rt_alerts_url: str = "http://percorsieorari.gtt.to.it/das_gtfsrt/alerts.aspx"
+    rt_trip_updates_url: str = "https://percorsieorari.gtt.to.it/das_gtfsrt/trip_update.aspx"
+    rt_alerts_url: str = "https://percorsieorari.gtt.to.it/das_gtfsrt/alerts.aspx"
 
     # --- Scioperi (registro MIT) ---
     strikes_csv_url: str = (

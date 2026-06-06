@@ -37,6 +37,7 @@ dependencies:
   web_socket_channel: ^3.0.1    # streaming mezzi (WS mappa)
   flutter_map: ^7.0.2           # mappa con tile OSM
   latlong2: ^0.9.1              # coordinate per flutter_map
+  shared_preferences: ^2.3.0    # persistenza preferiti locale (M6)
 
 dev_dependencies:
   flutter_test:

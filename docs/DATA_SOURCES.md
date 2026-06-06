@@ -25,9 +25,14 @@ Tre endpoint, tutti formato **GTFS-RT** (protobuf, NON JSON). Parsare con `gtfs-
 
 | Feed | URL | Contenuto |
 |------|-----|-----------|
-| Posizioni mezzi | http://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx | `VehiclePosition`: lat/lon, bearing, speed, trip, vehicle id |
-| Trip update | http://percorsieorari.gtt.to.it/das_gtfsrt/trip_update.aspx | `TripUpdate`: per ogni `stop_time_update` arrivo/partenza previsti |
-| Alerts | http://percorsieorari.gtt.to.it/das_gtfsrt/alerts.aspx | `Alert`: deviazioni/avvisi, con `informed_entity` (route/stop) |
+| Posizioni mezzi | https://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx | `VehiclePosition`: lat/lon, bearing, speed, trip, vehicle id |
+| Trip update | https://percorsieorari.gtt.to.it/das_gtfsrt/trip_update.aspx | `TripUpdate`: per ogni `stop_time_update` arrivo/partenza previsti |
+| Alerts | https://percorsieorari.gtt.to.it/das_gtfsrt/alerts.aspx | `Alert`: deviazioni/avvisi, con `informed_entity` (route/stop) |
+
+**Nota**: il server risponde solo su HTTPS (porta 443). Le URL con `http://` vanno in timeout
+senza errore. La homepage `https://percorsieorari.gtt.to.it/` non risponde (normale: è un
+server API puro, non un sito web). Dataset ufficiale su Open Data Torino:
+https://aperto.comune.torino.it/en/dataset/feed-gtfs-real-time-trasporti-gtt
 
 - Cache TTL consigliata: ~10–15 s per posizioni/trip update, ~60 s per gli alerts.
 - Arrivi alla fermata = scorrere i `TripUpdate`, filtrare gli `stop_time_update` con `stop_id` target,

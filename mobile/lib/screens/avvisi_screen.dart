@@ -18,7 +18,11 @@ class AvvisiScreen extends StatefulWidget {
 class _AvvisiScreenState extends State<AvvisiScreen> {
   late Future<AlertsResponse> _future = widget.api.alerts();
 
-  void _reload() => setState(() => _future = widget.api.alerts());
+  Future<void> _reload() async {
+    final next = widget.api.alerts();
+    setState(() { _future = next; });
+    await next;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +60,7 @@ class _AvvisiScreenState extends State<AvvisiScreen> {
                       body: 'Nessuna deviazione o sciopero al momento.');
                 }
                 return RefreshIndicator(
-                  onRefresh: () async => _reload(),
+                  onRefresh: _reload,
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(TTSpace.x4, 0, TTSpace.x4, TTSpace.x6),
                     children: [

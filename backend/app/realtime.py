@@ -13,6 +13,7 @@ from __future__ import annotations
 import time
 
 import httpx
+from fastapi import HTTPException
 from google.transit import gtfs_realtime_pb2
 
 from .cache import Cache, InMemoryCache
@@ -176,15 +177,24 @@ class FeedFetcher:
         cache: Cache | None = None,
     ):
         self._settings = settings or get_settings()
-        self._client = client or httpx.Client(timeout=self._settings.http_timeout)
+        self._client = client or httpx.Client(
+            timeout=self._settings.http_timeout,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; TransitoTorino/1.0)"},
+        )
         self._cache: Cache = cache or InMemoryCache()
 
     def _get(self, key: str, url: str, ttl: int) -> bytes:
         hit = self._cache.get(f"rt:{key}")
         if hit is not None:
             return hit
-        resp = self._client.get(url, follow_redirects=True)
-        resp.raise_for_status()
+        try:
+            resp = self._client.get(url, follow_redirects=True)
+            resp.raise_for_status()
+        except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Feed RT non raggiungibile: {exc}",
+            ) from exc
         self._cache.set(f"rt:{key}", resp.content, ttl)
         return resp.content
 

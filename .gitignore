@@ -30,3 +30,6 @@ firebase-admin*.json
 
 # OS
 .DS_Store
+
+# Contesto locale per Claude Code (non versionato, resta sul disco)
+CLAUDE.md

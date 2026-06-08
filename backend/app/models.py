@@ -33,8 +33,10 @@ class Stop(BaseModel):
     stop_id: str
     code: str | None = None
     name: str
+    desc: str | None = None  # via + comune (da stop_desc), per disambiguare le omonime
     lat: float | None = None
     lon: float | None = None
+    lines: list[str] = Field(default_factory=list)  # linee che servono la palina
 
 
 class LineShape(BaseModel):

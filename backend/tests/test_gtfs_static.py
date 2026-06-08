@@ -80,6 +80,32 @@ def test_mode_lookups_and_lines_expose_mode():
     assert modes == {"3": "tram", "55": "bus"}
 
 
+def test_stop_name_cleaned_desc_and_lines():
+    gtfs = GtfsStatic(
+        routes={"R10": {"route_id": "R10", "route_short_name": "10"}},
+        short_name_to_route_ids={"10": ["R10"]},
+        trips={"T1": {"trip_id": "T1", "route_id": "R10"}},
+        stops={
+            "350": {
+                "stop_code": "350",
+                "stop_name": "Fermata 350 - MASSARI",
+                "stop_desc": "V. GIUSTI N.6 NICHELINO",
+                "stop_lat": "45.0",
+                "stop_lon": "7.0",
+            }
+        },
+        schedule={"T1": {1: ("350", 100)}},
+    )
+    gtfs._build_stop_lines()
+    s = gtfs.stop("350")
+    assert s.name == "MASSARI"  # prefisso "Fermata 350 -" rimosso
+    assert s.desc == "Via Giusti N.6 Nichelino"  # abbreviazioni espanse, Title Case
+    assert s.lines == ["10"]  # linea servita dalla palina
+    # La ricerca trova ancora per numero/nome originale.
+    assert gtfs.search_stops("massari")[0].stop_id == "350"
+    assert gtfs.search_stops("350")[0].stop_id == "350"
+
+
 def test_shape_and_stops_for_line():
     gtfs = GtfsStatic(
         short_name_to_route_ids={"10": ["R10"]},

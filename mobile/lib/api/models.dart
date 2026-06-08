@@ -86,16 +86,28 @@ class Stop {
   final String stopId;
   final String? code;
   final String name;
+  final String? desc; // via + comune (disambigua le omonime)
   final double? lat;
   final double? lon;
-  const Stop({required this.stopId, this.code, required this.name, this.lat, this.lon});
+  final List<String> lines; // linee che servono la palina
+  const Stop({
+    required this.stopId,
+    this.code,
+    required this.name,
+    this.desc,
+    this.lat,
+    this.lon,
+    this.lines = const [],
+  });
 
   factory Stop.fromJson(Map<String, dynamic> j) => Stop(
         stopId: j['stop_id'] as String,
         code: j['code'] as String?,
         name: (j['name'] as String?) ?? '',
+        desc: j['desc'] as String?,
         lat: (j['lat'] as num?)?.toDouble(),
         lon: (j['lon'] as num?)?.toDouble(),
+        lines: (j['lines'] as List?)?.cast<String>() ?? const [],
       );
 }
 

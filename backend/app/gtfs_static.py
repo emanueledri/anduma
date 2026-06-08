@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import datetime as dt
 import io
+import re
 import sys
 import zipfile
 from dataclasses import dataclass, field
@@ -129,6 +130,9 @@ class GtfsStatic:
     # Tracciati: shape_id -> [(lat, lon), ...] ordinati per sequenza (per la
     # sovrimpressione del percorso sulla mappa). Da ``shapes.txt``.
     shapes: dict[str, list[tuple[float, float]]] = field(default_factory=dict)
+    # Linee che servono ogni palina (per disambiguare le fermate omonime):
+    # stop_id -> [short_name, ...]. Costruito dallo schedule (corse attive).
+    stop_lines: dict[str, list[str]] = field(default_factory=dict)
 
     # ------------------------------------------------------------------ build
     @classmethod
@@ -226,6 +230,25 @@ class GtfsStatic:
                 sid = sys.intern(r[i_stop])
                 secs = _hms_to_secs(r[i_arr]) if i_arr is not None else None
                 self.schedule.setdefault(sys.intern(tid), {})[seq] = (sid, secs)
+        self._build_stop_lines()
+
+    def _build_stop_lines(self) -> None:
+        """Indice palina -> linee servite (dalle corse indicizzate)."""
+        acc: dict[str, list[str]] = {}
+        for tid, stops in self.schedule.items():
+            short = self.short_name_for_trip(tid)
+            if not short:
+                continue
+            for _seq, (sid, _secs) in stops.items():
+                lst = acc.setdefault(sid, [])
+                if short not in lst:
+                    lst.append(short)
+        for lines in acc.values():
+            lines.sort(key=_line_sort_key_str)
+        self.stop_lines = acc
+
+    def lines_for_stop(self, stop_id: str) -> list[str]:
+        return list(self.stop_lines.get(stop_id, []))
 
     def resolve_seq(self, trip_id: str | None, stop_sequence: int) -> tuple[str, int | None] | None:
         """``(stop_id, arrival_secs)`` per (corsa, sequenza) dall'indice orari."""
@@ -340,7 +363,7 @@ class GtfsStatic:
             name = (row.get("stop_name") or "").strip()
             code = (row.get("stop_code") or "").strip()
             if q in name.lower() or q in code.lower() or q == stop_id.lower():
-                matches.append(_to_stop(stop_id, row))
+                matches.append(self._to_stop(stop_id, row))
         # i match per codice/id esatto vengono prima
         matches.sort(
             key=lambda s: (q not in (s.code or "").lower() and q != s.stop_id.lower(), s.name or "")
@@ -349,17 +372,60 @@ class GtfsStatic:
 
     def stop(self, stop_id: str) -> Stop | None:
         row = self.stops.get(stop_id)
-        return _to_stop(stop_id, row) if row else None
+        return self._to_stop(stop_id, row) if row else None
+
+    def _to_stop(self, stop_id: str, row: dict[str, str]) -> Stop:
+        return _to_stop(stop_id, row, lines=self.lines_for_stop(stop_id))
 
 
-def _to_stop(stop_id: str, row: dict[str, str]) -> Stop:
+def _to_stop(stop_id: str, row: dict[str, str], lines: list[str] | None = None) -> Stop:
     return Stop(
         stop_id=stop_id,
         code=(row.get("stop_code") or "").strip() or None,
-        name=(row.get("stop_name") or "").strip(),
+        name=_clean_stop_name(row.get("stop_name")),
+        desc=_normalize_desc(row.get("stop_desc")),
         lat=_to_float(row.get("stop_lat")),
         lon=_to_float(row.get("stop_lon")),
+        lines=lines or [],
     )
+
+
+# "Fermata 350 - MASSARI" → "MASSARI" (il numero palina resta in `code`).
+_STOP_NAME_PREFIX = re.compile(r"^fermata\s+\S+\s*-\s*", re.IGNORECASE)
+
+# Abbreviazioni toponomastiche GTT (stop_desc è in MAIUSCOLO).
+_DESC_ABBR = {
+    "V.": "Via", "V": "Via", "VIA": "Via",
+    "C.": "Corso", "C.SO": "Corso", "CSO": "Corso", "CORSO": "Corso",
+    "V.LE": "Viale", "VLE": "Viale", "VIALE": "Viale",
+    "P.": "Piazza", "P.ZA": "Piazza", "P.ZZA": "Piazza", "PZA": "Piazza", "PIAZZA": "Piazza",
+    "STR.": "Strada", "STRADA": "Strada", "LARGO": "Largo",
+}
+
+
+def _clean_stop_name(raw: str | None) -> str:
+    s = (raw or "").strip()
+    cleaned = _STOP_NAME_PREFIX.sub("", s).strip()
+    return cleaned or s
+
+
+def _normalize_desc(raw: str | None) -> str | None:
+    """``stop_desc`` (MAIUSCOLO, abbreviato) → leggibile: 'Via Giusti 6 · Nichelino'."""
+    s = (raw or "").strip()
+    if not s:
+        return None
+    out: list[str] = []
+    for tok in s.split():
+        out.append(_DESC_ABBR.get(tok.upper(), tok if not tok.isalpha() else tok.capitalize()))
+    return " ".join(out)
+
+
+def _line_sort_key_str(name: str) -> tuple[int, float, str]:
+    """Come ``_line_sort_key`` ma su una stringa-linea."""
+    try:
+        return (0, float(name), name)
+    except ValueError:
+        return (1, 0.0, name)
 
 
 def _to_float(value: str | None) -> float | None:

@@ -1,6 +1,7 @@
 // Schermata Arrivi: ricerca fermata + arrivi in tempo reale (auto-refresh 15s).
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
@@ -14,9 +15,12 @@ import '../widgets/pulsing_dot.dart';
 import '../widgets/state_views.dart';
 
 class ArriviScreen extends StatefulWidget {
-  const ArriviScreen({super.key, required this.api, required this.favs});
+  const ArriviScreen({super.key, required this.api, required this.favs, this.openStop});
   final ApiClient api;
   final FavoritesStore favs;
+
+  /// Richiesta esterna (deep-link da push) di aprire una fermata per id.
+  final ValueListenable<String?>? openStop;
 
   @override
   State<ArriviScreen> createState() => _ArriviScreenState();
@@ -37,7 +41,25 @@ class _ArriviScreenState extends State<ArriviScreen> {
   DateTime? _updatedAt;
 
   @override
+  void initState() {
+    super.initState();
+    widget.openStop?.addListener(_onOpenStopRequested);
+    // Eventuale richiesta già presente all'avvio (deep-link da app terminata).
+    if (widget.openStop?.value != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onOpenStopRequested());
+    }
+  }
+
+  void _onOpenStopRequested() {
+    final id = widget.openStop?.value;
+    if (id == null || !mounted) return;
+    // Nome reale risolto dopo il caricamento arrivi (ArrivalsResponse.name).
+    _selectStop(Stop(stopId: id, name: 'Fermata $id'));
+  }
+
+  @override
   void dispose() {
+    widget.openStop?.removeListener(_onOpenStopRequested);
     _debounce?.cancel();
     _refresh?.cancel();
     _searchCtrl.dispose();
@@ -89,6 +111,10 @@ class _ArriviScreenState extends State<ArriviScreen> {
           _arrivals = res;
           _error = null;
           _updatedAt = DateTime.now();
+          // Fermata aperta via deep-link (nome placeholder): risolvi il nome.
+          if (res.name != null && res.name!.isNotEmpty && _stop?.name == 'Fermata ${stop.stopId}') {
+            _stop = Stop(stopId: stop.stopId, name: res.name!, code: stop.code);
+          }
         });
       }
     } catch (e) {

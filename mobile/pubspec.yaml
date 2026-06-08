@@ -38,6 +38,8 @@ dependencies:
   flutter_map: ^7.0.2           # mappa con tile OSM
   latlong2: ^0.9.1              # coordinate per flutter_map
   shared_preferences: ^2.3.0    # persistenza preferiti locale (M6)
+  firebase_core: ^4.10.0
+  firebase_messaging: ^16.3.0
 
 dev_dependencies:
   flutter_test:

@@ -33,3 +33,8 @@ firebase-admin*.json
 
 # Contesto locale per Claude Code (non versionato, resta sul disco)
 CLAUDE.md
+
+# Firebase client config (ognuno usa il proprio progetto Firebase)
+mobile/android/app/google-services.json
+mobile/ios/Runner/GoogleService-Info.plist
+mobile/lib/firebase_options.dart

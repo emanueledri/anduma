@@ -1,9 +1,13 @@
 // Shell di navigazione: bottom navigation a 4 voci + accesso a Informazioni.
+// Orchestratore degli store condivisi (preferiti, sottoscrizioni, push) e del
+// deep-link in arrivo dalle notifiche.
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/favorites_store.dart';
 import '../api/models.dart';
+import '../api/push_manager.dart';
+import '../api/subscriptions_store.dart';
 import '../theme/tokens.dart';
 import 'arrivi_screen.dart';
 import 'avvisi_screen.dart';
@@ -21,6 +25,12 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   final _api = ApiClient();
   final _favs = FavoritesStore();
+  late final _subs = SubscriptionsStore(_api);
+  late final _push = PushManager(_api);
+
+  // Richiesta di aprire una fermata specifica negli Arrivi (deep-link push).
+  final _arriviStopRequest = ValueNotifier<String?>(null);
+
   int _index = 0;
 
   @override
@@ -28,26 +38,72 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _favs.load();
     _seedLineModes();
+    _initPush();
+  }
+
+  Future<void> _initPush() async {
+    await _push.init();
+    await _subs.load(); // dopo la registrazione device (X-Device-Id pronto)
+    _push.deepLink.addListener(_onDeepLink);
+    _push.foreground.addListener(_onForegroundMessage);
+    _onDeepLink(); // consuma un eventuale deep-link da app terminata
   }
 
   /// Carica l'elenco linee una volta per popolare il registry linea→modalità
-  /// (icone tram/metro/bus reali da `route_type`). Best-effort: se fallisce si
-  /// resta sull'euristica locale.
+  /// (icone tram/metro/bus reali da `route_type`). Best-effort.
   Future<void> _seedLineModes() async {
     try {
       final lines = await _api.lines();
       if (!mounted) return;
       LineModes.seed(lines);
-      setState(() {}); // ridisegna le pill con la modalità corretta
+      setState(() {});
     } catch (_) {
       // offline o backend giù: pill con euristica, nessun crash
     }
   }
 
+  void _onDeepLink() {
+    final link = _push.deepLink.value;
+    if (link == null || !mounted) return;
+    if (link.kind == 'imminent' && link.stopId != null) {
+      _arriviStopRequest.value = link.stopId; // ArriviScreen lo apre
+      setState(() => _index = 0);
+    } else if (link.kind == 'strike') {
+      setState(() => _index = 3); // Avvisi
+    }
+    _push.clearDeepLink();
+  }
+
+  void _onForegroundMessage() {
+    final m = _push.foreground.value;
+    if (m == null || !mounted) return;
+    final n = m.notification;
+    final title = n?.title ?? m.data['kind'] ?? 'Avviso';
+    final body = n?.body ?? '';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(body.isEmpty ? title : '$title — $body'),
+        action: m.data.isEmpty
+            ? null
+            : SnackBarAction(
+                label: 'Apri',
+                onPressed: () {
+                  _push.deepLink.value = AppDeepLink.fromData(m.data);
+                },
+              ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _push.deepLink.removeListener(_onDeepLink);
+    _push.foreground.removeListener(_onForegroundMessage);
+    _arriviStopRequest.dispose();
+    _push.dispose();
     _api.close();
     _favs.dispose();
+    _subs.dispose();
     super.dispose();
   }
 
@@ -55,12 +111,11 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final c = TTColors.of(context);
     final pages = [
-      ArriviScreen(api: _api, favs: _favs),
+      ArriviScreen(api: _api, favs: _favs, openStop: _arriviStopRequest),
       MappaScreen(api: _api, favs: _favs),
-      PreferitiScreen(api: _api, favs: _favs),
+      PreferitiScreen(api: _api, favs: _favs, subs: _subs),
       AvvisiScreen(api: _api, favs: _favs),
     ];
-    final titles = ['Arrivi', 'Mappa', 'Preferiti', 'Avvisi'];
 
     return Scaffold(
       appBar: _index == 1
@@ -76,7 +131,7 @@ class _HomeShellState extends State<HomeShell> {
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => Scaffold(
                           backgroundColor: c.bg,
-                          appBar: AppBar(title: Text(titles.isNotEmpty ? 'Informazioni' : '')),
+                          appBar: AppBar(title: const Text('Informazioni')),
                           body: const InfoScreen(),
                         )),
                   ),

@@ -26,6 +26,7 @@ class Line(BaseModel):
     line: str = Field(..., description="route_short_name, es. '10'")
     description: str | None = None
     route_ids: list[str] = Field(default_factory=list)
+    mode: str = Field("bus", description="tram | metro | rail | bus | ferry | funicular")
 
 
 class Stop(BaseModel):

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/favorites_store.dart';
+import '../api/models.dart';
 import '../theme/tokens.dart';
 import 'arrivi_screen.dart';
 import 'avvisi_screen.dart';
@@ -26,6 +27,21 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _favs.load();
+    _seedLineModes();
+  }
+
+  /// Carica l'elenco linee una volta per popolare il registry linea→modalità
+  /// (icone tram/metro/bus reali da `route_type`). Best-effort: se fallisce si
+  /// resta sull'euristica locale.
+  Future<void> _seedLineModes() async {
+    try {
+      final lines = await _api.lines();
+      if (!mounted) return;
+      LineModes.seed(lines);
+      setState(() {}); // ridisegna le pill con la modalità corretta
+    } catch (_) {
+      // offline o backend giù: pill con euristica, nessun crash
+    }
   }
 
   @override
@@ -42,7 +58,7 @@ class _HomeShellState extends State<HomeShell> {
       ArriviScreen(api: _api, favs: _favs),
       MappaScreen(api: _api, favs: _favs),
       PreferitiScreen(api: _api, favs: _favs),
-      AvvisiScreen(api: _api),
+      AvvisiScreen(api: _api, favs: _favs),
     ];
     final titles = ['Arrivi', 'Mappa', 'Preferiti', 'Avvisi'];
 

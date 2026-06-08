@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.gtfs_static import GtfsStatic
+from app.gtfs_static import GtfsStatic, _mode_for_route_type
 
 
 def test_route_short_name_maps_to_multiple_route_ids(gtfs: GtfsStatic):
@@ -48,6 +48,36 @@ def test_search_stops_limit(gtfs: GtfsStatic):
     # Tutte e tre le fermate contengono lettere comuni? usiamo limit.
     res = gtfs.search_stops("a", limit=1)
     assert len(res) == 1
+
+
+def test_mode_for_route_type_basic_and_extended():
+    assert _mode_for_route_type("0") == "tram"
+    assert _mode_for_route_type("1") == "metro"
+    assert _mode_for_route_type("3") == "bus"
+    assert _mode_for_route_type("7") == "funicular"
+    # Extended (HVT): classificato per centinaia.
+    assert _mode_for_route_type("900") == "tram"
+    assert _mode_for_route_type("401") == "metro"
+    # Sconosciuto / vuoto → bus difensivo.
+    assert _mode_for_route_type("") == "bus"
+    assert _mode_for_route_type(None) == "bus"
+    assert _mode_for_route_type("xyz") == "bus"
+
+
+def test_mode_lookups_and_lines_expose_mode():
+    gtfs = GtfsStatic(
+        routes={
+            "R3": {"route_id": "R3", "route_short_name": "3", "route_type": "0"},
+            "R55": {"route_id": "R55", "route_short_name": "55", "route_type": "3"},
+        },
+        short_name_to_route_ids={"3": ["R3"], "55": ["R55"]},
+    )
+    assert gtfs.mode_for_route_id("R3") == "tram"
+    assert gtfs.mode_for_line("3") == "tram"
+    assert gtfs.mode_for_line("55") == "bus"
+    assert gtfs.mode_for_line("999") == "bus"  # linea ignota
+    modes = {line.line: line.mode for line in gtfs.lines()}
+    assert modes == {"3": "tram", "55": "bus"}
 
 
 def test_empty_gtfs_is_safe():

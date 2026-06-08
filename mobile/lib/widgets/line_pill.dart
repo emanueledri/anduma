@@ -8,6 +8,14 @@ import '../theme/tokens.dart';
 
 enum PillSize { sm, md, lg, xl }
 
+IconData _iconFor(LineMode mode) => switch (mode) {
+      LineMode.tram => Icons.tram,
+      LineMode.metro => Icons.subway,
+      LineMode.rail => Icons.train,
+      LineMode.funicular => Icons.cable,
+      LineMode.bus => Icons.directions_bus,
+    };
+
 class LinePill extends StatelessWidget {
   const LinePill({
     super.key,
@@ -42,8 +50,7 @@ class LinePill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(mode == LineMode.tram ? Icons.tram : Icons.directions_bus,
-              size: spec.icon, color: fg),
+          Icon(_iconFor(mode), size: spec.icon, color: fg),
           SizedBox(width: spec.gap),
           Text(
             number,

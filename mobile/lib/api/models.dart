@@ -1,27 +1,65 @@
 // Modelli dati lato client, mappati 1:1 sulle risposte JSON del backend.
 
-/// Modalità del mezzo (per l'icona della pill linea). Il backend non la espone
-/// ancora; per Torino la inferiamo da un set noto di linee tram.
-enum LineMode { tram, bus }
+/// Modalità del mezzo (per l'icona della pill linea).
+enum LineMode { tram, metro, rail, bus, funicular }
 
+LineMode _modeFromString(String? s) => switch (s) {
+      'tram' => LineMode.tram,
+      'metro' => LineMode.metro,
+      'rail' => LineMode.rail,
+      'funicular' => LineMode.funicular,
+      _ => LineMode.bus,
+    };
+
+/// Fallback locale (linee tram storiche di Torino) usato finché il registry
+/// non è popolato dal backend (`/lines` espone `mode` da `route_type`).
 const _torinoTramLines = {'3', '4', '9', '10', '13', '15', '16'};
 
-LineMode modeForLine(String? line) =>
-    (line != null && _torinoTramLines.contains(line)) ? LineMode.tram : LineMode.bus;
+/// Registry linea→modalità, popolato una volta da `/lines` all'avvio. Finché è
+/// vuoto si ricade sull'euristica delle linee tram note.
+class LineModes {
+  static final Map<String, LineMode> _byLine = {};
+
+  static void seed(Iterable<TransitLine> lines) {
+    for (final l in lines) {
+      _byLine[l.line] = l.modeValue;
+    }
+  }
+
+  static LineMode of(String? line) {
+    if (line == null) return LineMode.bus;
+    final known = _byLine[line];
+    if (known != null) return known;
+    return _torinoTramLines.contains(line) ? LineMode.tram : LineMode.bus;
+  }
+}
+
+LineMode modeForLine(String? line) => LineModes.of(line);
 
 class TransitLine {
   final String line;
   final String? description;
   final List<String> routeIds;
-  const TransitLine({required this.line, this.description, this.routeIds = const []});
+  final String? modeName; // dal backend (route_type); null se non fornito
+  const TransitLine({
+    required this.line,
+    this.description,
+    this.routeIds = const [],
+    this.modeName,
+  });
 
   factory TransitLine.fromJson(Map<String, dynamic> j) => TransitLine(
         line: j['line'] as String,
         description: j['description'] as String?,
         routeIds: (j['route_ids'] as List?)?.cast<String>() ?? const [],
+        modeName: j['mode'] as String?,
       );
 
-  LineMode get mode => modeForLine(line);
+  /// Modalità dichiarata dal backend, o euristica se assente.
+  LineMode get modeValue =>
+      modeName != null ? _modeFromString(modeName) : modeForLine(line);
+
+  LineMode get mode => modeValue;
 }
 
 class Stop {

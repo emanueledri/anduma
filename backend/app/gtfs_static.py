@@ -25,6 +25,41 @@ from .models import Line, Stop
 
 _WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
+# GTFS route_type → modalità (per l'icona client). Coprono i codici base e i
+# principali "extended" (HVT) usati da alcune agenzie. Default: "bus".
+_MODE_BY_ROUTE_TYPE = {
+    0: "tram",
+    1: "metro",
+    2: "rail",
+    3: "bus",
+    4: "ferry",
+    5: "tram",  # cable tram
+    6: "bus",  # aerial lift → nessuna icona dedicata
+    7: "funicular",
+    11: "bus",  # trolleybus
+    12: "rail",  # monorail
+}
+
+
+def _mode_for_route_type(value: str | None) -> str:
+    """Normalizza ``route_type`` GTFS (anche extended) in una modalità nota."""
+    try:
+        rt = int((value or "").strip())
+    except (ValueError, AttributeError):
+        return "bus"
+    if rt in _MODE_BY_ROUTE_TYPE:
+        return _MODE_BY_ROUTE_TYPE[rt]
+    # Extended route types (HVT): si classifica per centinaia.
+    bucket = (rt // 100) * 100
+    return {
+        100: "rail",
+        400: "metro",
+        700: "bus",
+        900: "tram",
+        1000: "ferry",
+        1400: "funicular",
+    }.get(bucket, "bus")
+
 
 def _read_csv(zf: zipfile.ZipFile, name: str) -> list[dict[str, str]]:
     """Legge un file CSV dello ZIP GTFS; ritorna [] se assente."""
@@ -179,6 +214,17 @@ class GtfsStatic:
             return None
         return row.get("route_short_name") or None
 
+    def mode_for_route_id(self, route_id: str | None) -> str:
+        """Modalità (tram/metro/bus/...) di una route dal suo ``route_type``."""
+        if not route_id:
+            return "bus"
+        return _mode_for_route_type(self.routes.get(route_id, {}).get("route_type"))
+
+    def mode_for_line(self, short_name: str) -> str:
+        """Modalità di una linea: dalla prima route con quel ``short_name``."""
+        ids = self.short_name_to_route_ids.get(short_name)
+        return self.mode_for_route_id(ids[0]) if ids else "bus"
+
     def short_name_for_trip(self, trip_id: str | None) -> str | None:
         if not trip_id:
             return None
@@ -207,7 +253,10 @@ class GtfsStatic:
                 if long_name:
                     desc = long_name
                     break
-            out.append(Line(line=short, description=desc, route_ids=list(route_ids)))
+            mode = self.mode_for_route_id(route_ids[0]) if route_ids else "bus"
+            out.append(
+                Line(line=short, description=desc, route_ids=list(route_ids), mode=mode)
+            )
         out.sort(key=_line_sort_key)
         return out
 

@@ -238,17 +238,58 @@ class _ArriviScreenState extends State<ArriviScreen> {
     }
     return ListView.builder(
       itemCount: _results.length,
-      itemBuilder: (_, i) {
-        final s = _results[i];
-        return ListTile(
-          leading: Icon(Icons.place_outlined, color: c.primary),
-          title: Text(s.name, style: TextStyle(fontWeight: FontWeight.w700, color: c.ink)),
-          subtitle: s.code != null
-              ? Text('Palina ${s.code}', style: TextStyle(color: c.inkMuted))
-              : null,
-          onTap: () => _selectStop(s),
-        );
-      },
+      itemBuilder: (_, i) => _resultTile(c, _results[i]),
+    );
+  }
+
+  Widget _resultTile(TTColors c, Stop s) {
+    final subtitle = [
+      if (s.desc != null && s.desc!.isNotEmpty) s.desc!,
+      if (s.code != null) 'Palina ${s.code}',
+    ].join(' · ');
+    final lines = s.lines.take(6).toList();
+    return InkWell(
+      onTap: () => _selectStop(s),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: TTSpace.x4, vertical: TTSpace.x3),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(Icons.place_outlined, size: 20, color: c.primary),
+            ),
+            const SizedBox(width: TTSpace.x3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(s.name,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.ink)),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: TextStyle(fontSize: 12.5, color: c.inkMuted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                  if (lines.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 5,
+                      runSpacing: 5,
+                      children: [
+                        for (final l in lines)
+                          LinePill(number: l, mode: modeForLine(l), size: PillSize.sm),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

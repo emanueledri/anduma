@@ -103,6 +103,11 @@ class ApiClient {
     return VehiclesResponse.fromJson(data);
   }
 
+  Future<LineShape> lineShape(String line) async {
+    final data = await _get('/lines/$line/shape') as Map<String, dynamic>;
+    return LineShape.fromJson(data);
+  }
+
   Future<AlertsResponse> alerts({String? line}) async {
     final data = await _get('/alerts', {'line': line}) as Map<String, dynamic>;
     return AlertsResponse.fromJson(data);
@@ -142,6 +147,13 @@ class ApiClient {
   /// Crea un alert "strike" (sciopero) per una linea.
   Future<Subscription> addStrikeAlert({required String line}) async {
     final data = await _send('POST', '/me/subscriptions', {'kind': 'strike', 'line': line})
+        as Map<String, dynamic>;
+    return Subscription.fromJson(data);
+  }
+
+  /// Crea un alert "line_alert" (avvisi/deviazioni di servizio) per una linea.
+  Future<Subscription> addLineAlert({required String line}) async {
+    final data = await _send('POST', '/me/subscriptions', {'kind': 'line_alert', 'line': line})
         as Map<String, dynamic>;
     return Subscription.fromJson(data);
   }

@@ -120,18 +120,36 @@ def _parse_date(value: str | None) -> dt.date | None:
     return None
 
 
-def is_active_strike(strike: Strike, today: dt.date | None = None) -> bool:
-    """True se lo sciopero è in corso o futuro (la fine, o l'inizio, è ≥ oggi).
+# Quanto indietro/avanti consideriamo uno sciopero "rilevante" (giorni).
+_GRACE_DAYS = 2  # tolleranza per scioperi iniziati da poco / errori di fuso
+# Gli scioperi sono indetti al più ~un anno prima: oltre i ~13 mesi è quasi
+# certamente un refuso sulla data (es. fine "2107" per "2017").
+_HORIZON_DAYS = 400
 
-    Il registro MIT è onnicomprensivo (anche scioperi di anni fa): qui teniamo
-    solo quelli ancora rilevanti. Se le date non sono parsabili, NON scartiamo
-    (difensivo: meglio mostrare in più che nascondere uno sciopero reale).
+
+def is_active_strike(strike: Strike, today: dt.date | None = None) -> bool:
+    """True se lo sciopero è in corso o imminente, entro una finestra plausibile.
+
+    Il registro MIT è onnicomprensivo (scioperi dal 2014) e contiene refusi sulle
+    date (es. fine ``2107`` per ``2017``). Affidarsi alla sola *fine* lascia
+    passare questi casi. Qui uno sciopero è rilevante se **inizio o fine** cadono
+    nella finestra ``[oggi - grace, oggi + orizzonte]``: scarta sia il passato sia
+    le date assurdamente future. Se nessuna data è parsabile, NON scartiamo
+    (difensivo: meglio mostrarne uno in più che nascondere uno sciopero reale).
     """
     today = today or dt.date.today()
-    ref = _parse_date(strike.end_date) or _parse_date(strike.start_date)
-    if ref is None:
+    lo = today - dt.timedelta(days=_GRACE_DAYS)
+    hi = today + dt.timedelta(days=_HORIZON_DAYS)
+    start = _parse_date(strike.start_date)
+    end = _parse_date(strike.end_date)
+    if start is None and end is None:
         return True
-    return ref >= today
+    # Sciopero ancora in corso: iniziato nel passato ma con fine plausibile ≥ oggi.
+    if end is not None and today <= end <= hi:
+        return True
+    # Inizio (o fine, se l'inizio manca) entro la finestra.
+    ref = start or end
+    return ref is not None and lo <= ref <= hi
 
 
 def filter_upcoming(strikes: list[Strike], today: dt.date | None = None) -> list[Strike]:

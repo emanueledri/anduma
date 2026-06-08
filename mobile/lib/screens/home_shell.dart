@@ -68,10 +68,15 @@ class _HomeShellState extends State<HomeShell> {
     if (link.kind == 'imminent' && link.stopId != null) {
       _arriviStopRequest.value = link.stopId; // ArriviScreen lo apre
       setState(() => _index = 0);
-    } else if (link.kind == 'strike') {
+    } else if (link.kind == 'strike' || link.kind == 'line_alert') {
       setState(() => _index = 3); // Avvisi
     }
     _push.clearDeepLink();
+  }
+
+  void _openStopInArrivi(String stopId) {
+    _arriviStopRequest.value = stopId;
+    setState(() => _index = 0);
   }
 
   void _onForegroundMessage() {
@@ -112,7 +117,7 @@ class _HomeShellState extends State<HomeShell> {
     final c = TTColors.of(context);
     final pages = [
       ArriviScreen(api: _api, favs: _favs, openStop: _arriviStopRequest),
-      MappaScreen(api: _api, favs: _favs),
+      MappaScreen(api: _api, favs: _favs, onOpenStop: _openStopInArrivi),
       PreferitiScreen(api: _api, favs: _favs, subs: _subs),
       AvvisiScreen(api: _api, favs: _favs),
     ];

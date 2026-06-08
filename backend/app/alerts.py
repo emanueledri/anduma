@@ -32,13 +32,15 @@ from .config import Settings, get_settings
 from .db import NotifiedEvent, Subscription
 from .gtfs_static import GtfsStatic
 from .models import Strike
-from .realtime import arrivals_for_stop, parse_feed
+from .realtime import alert_entities, arrivals_for_stop, parse_feed
 from .scioperi import filter_for_torino, filter_upcoming, parse_strikes_csv
 
 # Buffer oltre l'ETA stimato prima che la dedup scada (il mezzo è passato).
 _IMMINENT_TTL_BUFFER_S = 120
 # Per gli scioperi non abbiamo sempre una data di fine affidabile: TTL lungo.
 _STRIKE_TTL_DAYS = 30
+# Avvisi di servizio: ri-notifica al più una volta a settimana se ancora attivi.
+_ALERT_TTL_DAYS = 7
 
 
 @dataclass
@@ -201,6 +203,58 @@ def evaluate_strikes(
     return enqueued
 
 
+# -------------------------------------------------------------- service alerts
+def evaluate_service_alerts(
+    session: Session,
+    feed: gtfs_realtime_pb2.FeedMessage,
+    gtfs: GtfsStatic,
+    dispatcher: Dispatcher,
+    now: float | None = None,
+) -> int:
+    """Notifica le sottoscrizioni ``line_alert`` per gli avvisi sulle loro linee.
+
+    Deduplica per ``(subscription, entity.id)``: un avviso che persiste non
+    rinotifica finché non scade il TTL. Idempotente.
+    """
+    now_ts = now if now is not None else time.time()
+    now_dt = _now_dt(now_ts)
+    expires = now_dt + dt.timedelta(days=_ALERT_TTL_DAYS)
+    subs = session.scalars(
+        select(Subscription).where(
+            Subscription.kind == "line_alert", Subscription.active.is_(True)
+        )
+    ).all()
+    if not subs:
+        return 0
+
+    entities = alert_entities(feed, gtfs)
+    enqueued = 0
+    for entity_id, alert in entities:
+        for sub in subs:
+            if not sub.line or sub.line not in alert.lines:
+                continue
+            key = f"alert:{entity_id}"
+            if _already_notified(session, sub.id, key, now_dt):
+                continue
+            session.add(NotifiedEvent(subscription_id=sub.id, dedup_key=key, expires_at=expires))
+            header = alert.header or "Avviso di servizio"
+            dispatcher.enqueue(
+                PushMessage(
+                    device_id=sub.device_id,
+                    title=f"Linea {sub.line}: {header}",
+                    body=alert.description or header,
+                    data={
+                        "kind": "line_alert",
+                        "line": sub.line,
+                        "effect": alert.effect or "",
+                    },
+                )
+            )
+            enqueued += 1
+    session.commit()
+    return enqueued
+
+
 # ----------------------------------------------------------- scheduler wiring
 def run_imminent(provider, dispatcher: Dispatcher, session_factory: sessionmaker[Session]) -> int:
     """Job imminent: legge i trip update dal provider e valuta (tollerante a errori)."""
@@ -221,6 +275,19 @@ def run_strikes(provider, dispatcher: Dispatcher, session_factory: sessionmaker[
         return 0
     with session_factory() as session:
         return evaluate_strikes(session, strikes, dispatcher)
+
+
+def run_service_alerts(
+    provider, dispatcher: Dispatcher, session_factory: sessionmaker[Session]
+) -> int:
+    """Job avvisi di linea: legge il feed alert dal provider e valuta (tollerante)."""
+    try:
+        feed = parse_feed(provider.alerts_bytes())
+        gtfs = provider.gtfs()
+    except Exception:
+        return 0
+    with session_factory() as session:
+        return evaluate_service_alerts(session, feed, gtfs, dispatcher)
 
 
 def build_scheduler(
@@ -257,6 +324,15 @@ def build_scheduler(
         max_instances=1,
         coalesce=True,
     )
+    scheduler.add_job(
+        run_service_alerts,
+        "interval",
+        seconds=settings.service_alert_interval_s,
+        args=[provider, dispatcher, session_factory],
+        id="service_alert",
+        max_instances=1,
+        coalesce=True,
+    )
     if push_processor is not None:
         scheduler.add_job(
             push_processor,
@@ -275,6 +351,7 @@ __all__ = [
     "InProcessDispatcher",
     "evaluate_imminent",
     "evaluate_strikes",
+    "evaluate_service_alerts",
     "strike_key",
     "run_imminent",
     "run_strikes",

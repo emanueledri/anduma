@@ -23,6 +23,8 @@ from .models import (
     ArrivalsResponse,
     Health,
     Line,
+    LineShape,
+    ShapePath,
     Stop,
     VehiclesResponse,
 )
@@ -140,6 +142,22 @@ def _vehicles_response(provider: DataProvider, line: str) -> VehiclesResponse:
     feed = realtime.parse_feed(provider.vehicle_positions_bytes())
     vehicles = realtime.vehicles_for_line(feed, gtfs, line)
     return VehiclesResponse(line=line, count=len(vehicles), vehicles=vehicles)
+
+
+@app.get("/lines/{line}/shape", response_model=LineShape)
+def line_shape(
+    line: str,
+    provider: DataProvider = Depends(get_provider),
+) -> LineShape:
+    """Tracciato (percorso) e fermate di una linea, per la mappa."""
+    gtfs = provider.gtfs()
+    return LineShape(
+        line=line,
+        polylines=[
+            ShapePath(direction=d, points=pts) for d, pts in gtfs.shape_for_line(line)
+        ],
+        stops=gtfs.stops_for_line(line),
+    )
 
 
 @app.get("/lines/{line}/vehicles", response_model=VehiclesResponse)

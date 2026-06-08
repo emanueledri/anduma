@@ -80,6 +80,61 @@ def test_mode_lookups_and_lines_expose_mode():
     assert modes == {"3": "tram", "55": "bus"}
 
 
+def test_stop_name_cleaned_desc_and_lines():
+    gtfs = GtfsStatic(
+        routes={"R10": {"route_id": "R10", "route_short_name": "10"}},
+        short_name_to_route_ids={"10": ["R10"]},
+        trips={"T1": {"trip_id": "T1", "route_id": "R10"}},
+        stops={
+            "350": {
+                "stop_code": "350",
+                "stop_name": "Fermata 350 - MASSARI",
+                "stop_desc": "V. GIUSTI N.6 NICHELINO",
+                "stop_lat": "45.0",
+                "stop_lon": "7.0",
+            }
+        },
+        schedule={"T1": {1: ("350", 100)}},
+    )
+    gtfs._build_stop_lines()
+    s = gtfs.stop("350")
+    assert s.name == "MASSARI"  # prefisso "Fermata 350 -" rimosso
+    assert s.desc == "Via Giusti N.6 Nichelino"  # abbreviazioni espanse, Title Case
+    assert s.lines == ["10"]  # linea servita dalla palina
+    # La ricerca trova ancora per numero/nome originale.
+    assert gtfs.search_stops("massari")[0].stop_id == "350"
+    assert gtfs.search_stops("350")[0].stop_id == "350"
+
+
+def test_shape_and_stops_for_line():
+    gtfs = GtfsStatic(
+        short_name_to_route_ids={"10": ["R10"]},
+        trips={
+            "T1": {"trip_id": "T1", "route_id": "R10", "shape_id": "S1", "direction_id": "0"},
+            "T2": {"trip_id": "T2", "route_id": "R10", "shape_id": "S1"},  # stesso shape
+            "T3": {"trip_id": "T3", "route_id": "R10", "shape_id": "S2", "direction_id": "1"},
+            "TX": {"trip_id": "TX", "route_id": "R99", "shape_id": "S9"},  # altra linea
+        },
+        shapes={
+            "S1": [(45.0, 7.0), (45.1, 7.1), (45.2, 7.2)],  # più lungo
+            "S2": [(45.0, 7.0), (45.05, 7.05)],
+            "S9": [(40.0, 8.0)],
+        },
+        stops={
+            "350": {"stop_name": "A", "stop_lat": "45.0", "stop_lon": "7.0"},
+            "351": {"stop_name": "B", "stop_lat": "45.1", "stop_lon": "7.1"},
+        },
+        schedule={"T1": {1: ("350", 100), 2: ("351", 200)}},
+    )
+    shapes = gtfs.shape_for_line("10")
+    assert len(shapes) == 2  # S1 e S2 (non S9 di un'altra linea)
+    assert shapes[0] == (0, [(45.0, 7.0), (45.1, 7.1), (45.2, 7.2)])  # più lungo, direzione 0
+    assert shapes[1][0] == 1  # S2 è direzione 1
+    stops = gtfs.stops_for_line("10")
+    assert [s.stop_id for s in stops] == ["350", "351"]  # in ordine di sequenza
+    assert gtfs.shape_for_line("999") == [] and gtfs.stops_for_line("999") == []
+
+
 def test_empty_gtfs_is_safe():
     empty = GtfsStatic()
     assert empty.lines() == []

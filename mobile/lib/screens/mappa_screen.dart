@@ -15,9 +15,12 @@ import '../widgets/vehicle_marker.dart';
 const _torino = LatLng(45.0703, 7.6869);
 
 class MappaScreen extends StatefulWidget {
-  const MappaScreen({super.key, required this.api, required this.favs});
+  const MappaScreen({super.key, required this.api, required this.favs, this.onOpenStop});
   final ApiClient api;
   final FavoritesStore favs;
+
+  /// Apre una fermata negli Arrivi (tap su una fermata della mappa).
+  final void Function(String stopId)? onOpenStop;
 
   @override
   State<MappaScreen> createState() => _MappaScreenState();
@@ -31,12 +34,40 @@ class _MappaScreenState extends State<MappaScreen> {
   RealtimeStatus _status = RealtimeStatus.connecting;
   String? _selectedVehicleId;
   List<TransitLine> _lines = const [];
+  List<(int, List<LatLng>)> _routePolys = const []; // (direzione, punti)
+  List<Stop> _routeStops = const [];
 
   @override
   void initState() {
     super.initState();
     _subscribe();
     _loadLines();
+    _loadShape();
+  }
+
+  Future<void> _loadShape() async {
+    final line = _line;
+    try {
+      final shape = await widget.api.lineShape(line);
+      if (!mounted || line != _line) return;
+      setState(() {
+        _routePolys = [
+          for (final poly in shape.polylines)
+            (poly.direction, [for (final pt in poly.points) LatLng(pt[0], pt[1])]),
+        ];
+        _routeStops = [
+          for (final s in shape.stops)
+            if (s.lat != null && s.lon != null) s,
+        ];
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _routePolys = const [];
+          _routeStops = const [];
+        });
+      }
+    }
   }
 
   Future<void> _loadLines() async {
@@ -67,8 +98,11 @@ class _MappaScreenState extends State<MappaScreen> {
     setState(() {
       _line = line;
       _selectedVehicleId = null;
+      _routePolys = const [];
+      _routeStops = const [];
     });
     _subscribe();
+    _loadShape();
   }
 
   @override
@@ -97,6 +131,45 @@ class _MappaScreenState extends State<MappaScreen> {
                   ? _darkTileBuilder
                   : null,
             ),
+            if (_routePolys.isNotEmpty)
+              PolylineLayer(
+                polylines: [
+                  for (final (dir, pts) in _routePolys)
+                    Polyline(
+                      points: pts,
+                      strokeWidth: 5,
+                      color: (dir == 1 ? c.accent : c.primary).withValues(alpha: 0.6),
+                      borderStrokeWidth: 1,
+                      borderColor: c.surface.withValues(alpha: 0.8),
+                    ),
+                ],
+              ),
+            if (_routeStops.isNotEmpty)
+              MarkerLayer(
+                markers: [
+                  for (final s in _routeStops)
+                    Marker(
+                      point: LatLng(s.lat!, s.lon!),
+                      width: 22,
+                      height: 22,
+                      child: GestureDetector(
+                        onTap: () => widget.onOpenStop?.call(s.stopId),
+                        behavior: HitTestBehavior.opaque,
+                        child: Center(
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: c.surface,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: c.primary, width: 2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             MarkerLayer(
               markers: [
                 for (final v in _vehicles)

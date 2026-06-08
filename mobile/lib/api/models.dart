@@ -62,20 +62,64 @@ class TransitLine {
   LineMode get mode => modeValue;
 }
 
+/// Una polilinea del percorso con la sua direzione (0/1), per colorarla.
+class RoutePath {
+  final int direction;
+  final List<List<double>> points; // [ [lat,lon], ... ]
+  const RoutePath({this.direction = 0, this.points = const []});
+
+  factory RoutePath.fromJson(Map<String, dynamic> j) => RoutePath(
+        direction: (j['direction'] as num?)?.toInt() ?? 0,
+        points: ((j['points'] as List?) ?? const [])
+            .map((pt) => (pt as List).map((n) => (n as num).toDouble()).toList())
+            .toList(),
+      );
+}
+
+/// Tracciato (percorso) + fermate di una linea, per la sovrimpressione mappa.
+class LineShape {
+  final String line;
+  final List<RoutePath> polylines;
+  final List<Stop> stops;
+  const LineShape({required this.line, this.polylines = const [], this.stops = const []});
+
+  factory LineShape.fromJson(Map<String, dynamic> j) => LineShape(
+        line: j['line'] as String,
+        polylines: ((j['polylines'] as List?) ?? const [])
+            .map((e) => RoutePath.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        stops: ((j['stops'] as List?) ?? const [])
+            .map((e) => Stop.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
 class Stop {
   final String stopId;
   final String? code;
   final String name;
+  final String? desc; // via + comune (disambigua le omonime)
   final double? lat;
   final double? lon;
-  const Stop({required this.stopId, this.code, required this.name, this.lat, this.lon});
+  final List<String> lines; // linee che servono la palina
+  const Stop({
+    required this.stopId,
+    this.code,
+    required this.name,
+    this.desc,
+    this.lat,
+    this.lon,
+    this.lines = const [],
+  });
 
   factory Stop.fromJson(Map<String, dynamic> j) => Stop(
         stopId: j['stop_id'] as String,
         code: j['code'] as String?,
         name: (j['name'] as String?) ?? '',
+        desc: j['desc'] as String?,
         lat: (j['lat'] as num?)?.toDouble(),
         lon: (j['lon'] as num?)?.toDouble(),
+        lines: (j['lines'] as List?)?.cast<String>() ?? const [],
       );
 }
 

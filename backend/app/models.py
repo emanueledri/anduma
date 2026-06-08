@@ -33,8 +33,25 @@ class Stop(BaseModel):
     stop_id: str
     code: str | None = None
     name: str
+    desc: str | None = None  # via + comune (da stop_desc), per disambiguare le omonime
     lat: float | None = None
     lon: float | None = None
+    lines: list[str] = Field(default_factory=list)  # linee che servono la palina
+
+
+class ShapePath(BaseModel):
+    """Una polilinea del percorso, con la direzione (0/1) per colorarla."""
+
+    direction: int = 0
+    points: list[tuple[float, float]] = Field(default_factory=list)  # [[lat, lon], ...]
+
+
+class LineShape(BaseModel):
+    """Tracciato (percorso) e fermate di una linea, per la sovrimpressione mappa."""
+
+    line: str
+    polylines: list[ShapePath] = Field(default_factory=list)
+    stops: list[Stop] = Field(default_factory=list)
 
 
 class Arrival(BaseModel):
@@ -130,7 +147,7 @@ class FavoriteOut(BaseModel):
 
 
 class SubscriptionCreate(BaseModel):
-    kind: Literal["imminent", "strike"]
+    kind: Literal["imminent", "strike", "line_alert"]
     stop_id: str | None = None
     line: str | None = None
     threshold_min: int | None = Field(None, ge=1, le=120)
@@ -149,8 +166,8 @@ class SubscriptionCreate(BaseModel):
             ]
             if missing:
                 raise ValueError(f"kind 'imminent' richiede: {', '.join(missing)}")
-        elif self.kind == "strike" and not self.line:
-            raise ValueError("kind 'strike' richiede 'line'")
+        elif self.kind in ("strike", "line_alert") and not self.line:
+            raise ValueError(f"kind '{self.kind}' richiede 'line'")
         return self
 
 

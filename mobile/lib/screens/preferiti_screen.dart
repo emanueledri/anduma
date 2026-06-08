@@ -250,18 +250,6 @@ class _LineCard extends StatelessWidget {
   final FavoritesStore favs;
   final SubscriptionsStore subs;
 
-  Future<void> _toggleStrike(BuildContext context, bool on) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final ok = await subs.toggleStrike(fav.ref, on: on);
-    if (!ok) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(subs.ready
-            ? 'Operazione non riuscita. Riprova.'
-            : 'Notifiche non ancora attive su questo dispositivo.'),
-      ));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = TTColors.of(context);
@@ -293,12 +281,13 @@ class _LineCard extends StatelessWidget {
             ListenableBuilder(
               listenable: subs,
               builder: (context, _) {
-                final on = subs.strikeForLine(fav.ref) != null;
+                final on = subs.strikeForLine(fav.ref) != null ||
+                    subs.lineAlertForLine(fav.ref) != null;
                 return IconButton(
                   icon: Icon(on ? Icons.notifications_active : Icons.notifications_none,
                       size: 20, color: on ? c.accent : c.inkMuted),
-                  tooltip: on ? 'Disattiva avviso sciopero' : 'Avvisami in caso di sciopero',
-                  onPressed: () => _toggleStrike(context, !on),
+                  tooltip: 'Avvisi e scioperi',
+                  onPressed: () => showLineAlertSheet(context, line: fav.ref, subs: subs),
                 );
               },
             ),

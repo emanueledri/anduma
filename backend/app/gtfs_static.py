@@ -126,6 +126,9 @@ class GtfsStatic:
     schedule: dict[str, dict[int, tuple[str, int | None]]] = field(default_factory=dict)
     # Data di servizio per cui è costruito ``schedule`` (base per il delay).
     schedule_date: dt.date | None = None
+    # Tracciati: shape_id -> [(lat, lon), ...] ordinati per sequenza (per la
+    # sovrimpressione del percorso sulla mappa). Da ``shapes.txt``.
+    shapes: dict[str, list[tuple[float, float]]] = field(default_factory=dict)
 
     # ------------------------------------------------------------------ build
     @classmethod
@@ -159,7 +162,36 @@ class GtfsStatic:
 
             if schedule_for_date is not None:
                 gtfs._build_schedule(zf, schedule_for_date)
+            gtfs._build_shapes(zf)
         return gtfs
+
+    def _build_shapes(self, zf: zipfile.ZipFile) -> None:
+        """Indicizza ``shapes.txt``: shape_id -> punti ordinati per sequenza."""
+        if "shapes.txt" not in zf.namelist():
+            return
+        # Accumula (seq, lat, lon) per ordinare alla fine senza ri-scansioni.
+        tmp: dict[str, list[tuple[int, float, float]]] = {}
+        with zf.open("shapes.txt") as fh:
+            reader = csv.reader(io.TextIOWrapper(fh, encoding="utf-8-sig"))
+            header = next(reader, None)
+            if not header:
+                return
+            idx = {name: i for i, name in enumerate(header)}
+            i_id = idx.get("shape_id")
+            i_lat, i_lon = idx.get("shape_pt_lat"), idx.get("shape_pt_lon")
+            i_seq = idx.get("shape_pt_sequence")
+            if None in (i_id, i_lat, i_lon, i_seq):
+                return
+            for r in reader:
+                try:
+                    sid = r[i_id]
+                    pt = (int(r[i_seq]), float(r[i_lat]), float(r[i_lon]))
+                except (ValueError, IndexError):
+                    continue
+                tmp.setdefault(sys.intern(sid), []).append(pt)
+        for sid, pts in tmp.items():
+            pts.sort(key=lambda p: p[0])
+            self.shapes[sid] = [(lat, lon) for _seq, lat, lon in pts]
 
     def _build_schedule(self, zf: zipfile.ZipFile, on_date: dt.date) -> None:
         """Indicizza ``stop_times.txt`` per le corse attive in ``on_date`` (streaming)."""
@@ -224,6 +256,44 @@ class GtfsStatic:
         """Modalità di una linea: dalla prima route con quel ``short_name``."""
         ids = self.short_name_to_route_ids.get(short_name)
         return self.mode_for_route_id(ids[0]) if ids else "bus"
+
+    def _trip_ids_for_line(self, short_name: str) -> list[str]:
+        """trip_id delle corse di una linea (per shape/fermate)."""
+        route_ids = set(self.short_name_to_route_ids.get(short_name, []))
+        if not route_ids:
+            return []
+        return [
+            tid
+            for tid, row in self.trips.items()
+            if (row.get("route_id") or "") in route_ids
+        ]
+
+    def shape_for_line(self, short_name: str, limit: int = 8) -> list[list[tuple[float, float]]]:
+        """Tracciati distinti di una linea (i più lunghi prima), per la mappa."""
+        seen: set[str] = set()
+        polylines: list[list[tuple[float, float]]] = []
+        for tid in self._trip_ids_for_line(short_name):
+            sid = (self.trips.get(tid, {}).get("shape_id") or "").strip()
+            if not sid or sid in seen:
+                continue
+            pts = self.shapes.get(sid)
+            if not pts:
+                continue
+            seen.add(sid)
+            polylines.append(pts)
+        polylines.sort(key=len, reverse=True)
+        return polylines[:limit]
+
+    def stops_for_line(self, short_name: str) -> list[Stop]:
+        """Fermate servite da una linea (dalle corse attive indicizzate)."""
+        stop_ids: list[str] = []
+        seen: set[str] = set()
+        for tid in self._trip_ids_for_line(short_name):
+            for _seq, (sid, _secs) in sorted(self.schedule.get(tid, {}).items()):
+                if sid not in seen and sid in self.stops:
+                    seen.add(sid)
+                    stop_ids.append(sid)
+        return [_to_stop(sid, self.stops[sid]) for sid in stop_ids]
 
     def short_name_for_trip(self, trip_id: str | None) -> str | None:
         if not trip_id:

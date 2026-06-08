@@ -80,6 +80,34 @@ def test_mode_lookups_and_lines_expose_mode():
     assert modes == {"3": "tram", "55": "bus"}
 
 
+def test_shape_and_stops_for_line():
+    gtfs = GtfsStatic(
+        short_name_to_route_ids={"10": ["R10"]},
+        trips={
+            "T1": {"trip_id": "T1", "route_id": "R10", "shape_id": "S1"},
+            "T2": {"trip_id": "T2", "route_id": "R10", "shape_id": "S1"},  # stesso shape
+            "T3": {"trip_id": "T3", "route_id": "R10", "shape_id": "S2"},
+            "TX": {"trip_id": "TX", "route_id": "R99", "shape_id": "S9"},  # altra linea
+        },
+        shapes={
+            "S1": [(45.0, 7.0), (45.1, 7.1), (45.2, 7.2)],  # più lungo
+            "S2": [(45.0, 7.0), (45.05, 7.05)],
+            "S9": [(40.0, 8.0)],
+        },
+        stops={
+            "350": {"stop_name": "A", "stop_lat": "45.0", "stop_lon": "7.0"},
+            "351": {"stop_name": "B", "stop_lat": "45.1", "stop_lon": "7.1"},
+        },
+        schedule={"T1": {1: ("350", 100), 2: ("351", 200)}},
+    )
+    shapes = gtfs.shape_for_line("10")
+    assert len(shapes) == 2  # S1 e S2 (non S9 di un'altra linea)
+    assert shapes[0] == [(45.0, 7.0), (45.1, 7.1), (45.2, 7.2)]  # il più lungo prima
+    stops = gtfs.stops_for_line("10")
+    assert [s.stop_id for s in stops] == ["350", "351"]  # in ordine di sequenza
+    assert gtfs.shape_for_line("999") == [] and gtfs.stops_for_line("999") == []
+
+
 def test_empty_gtfs_is_safe():
     empty = GtfsStatic()
     assert empty.lines() == []

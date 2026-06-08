@@ -37,6 +37,15 @@ class Stop(BaseModel):
     lon: float | None = None
 
 
+class LineShape(BaseModel):
+    """Tracciato (percorso) e fermate di una linea, per la sovrimpressione mappa."""
+
+    line: str
+    # Più polilinee (varianti/direzioni); ognuna è una lista di [lat, lon].
+    polylines: list[list[tuple[float, float]]] = Field(default_factory=list)
+    stops: list[Stop] = Field(default_factory=list)
+
+
 class Arrival(BaseModel):
     line: str | None = None
     headsign: str | None = None

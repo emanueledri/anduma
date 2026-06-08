@@ -103,6 +103,11 @@ class ApiClient {
     return VehiclesResponse.fromJson(data);
   }
 
+  Future<LineShape> lineShape(String line) async {
+    final data = await _get('/lines/$line/shape') as Map<String, dynamic>;
+    return LineShape.fromJson(data);
+  }
+
   Future<AlertsResponse> alerts({String? line}) async {
     final data = await _get('/alerts', {'line': line}) as Map<String, dynamic>;
     return AlertsResponse.fromJson(data);

@@ -31,12 +31,40 @@ class _MappaScreenState extends State<MappaScreen> {
   RealtimeStatus _status = RealtimeStatus.connecting;
   String? _selectedVehicleId;
   List<TransitLine> _lines = const [];
+  List<List<LatLng>> _routePolys = const [];
+  List<LatLng> _routeStops = const [];
 
   @override
   void initState() {
     super.initState();
     _subscribe();
     _loadLines();
+    _loadShape();
+  }
+
+  Future<void> _loadShape() async {
+    final line = _line;
+    try {
+      final shape = await widget.api.lineShape(line);
+      if (!mounted || line != _line) return;
+      setState(() {
+        _routePolys = [
+          for (final poly in shape.polylines)
+            [for (final pt in poly) LatLng(pt[0], pt[1])],
+        ];
+        _routeStops = [
+          for (final s in shape.stops)
+            if (s.lat != null && s.lon != null) LatLng(s.lat!, s.lon!),
+        ];
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _routePolys = const [];
+          _routeStops = const [];
+        });
+      }
+    }
   }
 
   Future<void> _loadLines() async {
@@ -67,8 +95,11 @@ class _MappaScreenState extends State<MappaScreen> {
     setState(() {
       _line = line;
       _selectedVehicleId = null;
+      _routePolys = const [];
+      _routeStops = const [];
     });
     _subscribe();
+    _loadShape();
   }
 
   @override
@@ -97,6 +128,37 @@ class _MappaScreenState extends State<MappaScreen> {
                   ? _darkTileBuilder
                   : null,
             ),
+            if (_routePolys.isNotEmpty)
+              PolylineLayer(
+                polylines: [
+                  for (final poly in _routePolys)
+                    Polyline(
+                      points: poly,
+                      strokeWidth: 5,
+                      color: c.primary.withValues(alpha: 0.55),
+                      borderStrokeWidth: 1,
+                      borderColor: c.surface.withValues(alpha: 0.8),
+                    ),
+                ],
+              ),
+            if (_routeStops.isNotEmpty)
+              MarkerLayer(
+                markers: [
+                  for (final p in _routeStops)
+                    Marker(
+                      point: p,
+                      width: 12,
+                      height: 12,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: c.surface,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: c.primary, width: 2),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             MarkerLayer(
               markers: [
                 for (final v in _vehicles)

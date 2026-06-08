@@ -62,6 +62,26 @@ class TransitLine {
   LineMode get mode => modeValue;
 }
 
+/// Tracciato (percorso) + fermate di una linea, per la sovrimpressione mappa.
+class LineShape {
+  final String line;
+  final List<List<List<double>>> polylines; // [ [ [lat,lon], ... ], ... ]
+  final List<Stop> stops;
+  const LineShape({required this.line, this.polylines = const [], this.stops = const []});
+
+  factory LineShape.fromJson(Map<String, dynamic> j) => LineShape(
+        line: j['line'] as String,
+        polylines: ((j['polylines'] as List?) ?? const [])
+            .map((poly) => (poly as List)
+                .map((pt) => (pt as List).map((n) => (n as num).toDouble()).toList())
+                .toList())
+            .toList(),
+        stops: ((j['stops'] as List?) ?? const [])
+            .map((e) => Stop.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
 class Stop {
   final String stopId;
   final String? code;

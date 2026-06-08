@@ -49,7 +49,7 @@ class _StopAlertSheet extends StatefulWidget {
 
 class _StopAlertSheetState extends State<_StopAlertSheet> {
   int _threshold = 5;
-  static const _thresholds = [3, 5, 10];
+  static const _thresholds = [5, 10, 20];
 
   @override
   Widget build(BuildContext context) {

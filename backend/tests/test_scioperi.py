@@ -37,6 +37,22 @@ def test_is_active_strike_date_formats():
     assert is_active_strike(Strike(start_date=None), today)  # difensivo
 
 
+def test_is_active_strike_rejects_typo_future_end():
+    """Refuso nel dato MIT: inizio 2017, fine '2107' (per 2017). Va scartato."""
+    today = dt.date(2026, 6, 6)
+    assert not is_active_strike(
+        Strike(start_date="2017-07-06", end_date="2107-07-06"), today
+    )
+    # Anche una fine assurdamente futura da sola non basta a tenerlo.
+    assert not is_active_strike(Strike(start_date=None, end_date="2107-07-06"), today)
+
+
+def test_is_active_strike_keeps_ongoing_multiday():
+    """Sciopero iniziato qualche giorno fa ma con fine ancora futura: tenuto."""
+    today = dt.date(2026, 6, 6)
+    assert is_active_strike(Strike(start_date="2026-06-01", end_date="2026-06-08"), today)
+
+
 def test_parse_canonical_csv(strikes_csv: str):
     strikes = parse_strikes_csv(strikes_csv)
     assert len(strikes) == 3

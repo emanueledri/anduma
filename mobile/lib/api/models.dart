@@ -205,6 +205,33 @@ class Strike {
       );
 }
 
+/// Sottoscrizione ad alert (lato utente). `kind`: 'imminent' | 'strike'.
+class Subscription {
+  final int id;
+  final String kind;
+  final String? stopId;
+  final String? line;
+  final int? thresholdMin;
+  final bool active;
+  const Subscription({
+    required this.id,
+    required this.kind,
+    this.stopId,
+    this.line,
+    this.thresholdMin,
+    this.active = true,
+  });
+
+  factory Subscription.fromJson(Map<String, dynamic> j) => Subscription(
+        id: (j['id'] as num).toInt(),
+        kind: j['kind'] as String,
+        stopId: j['stop_id'] as String?,
+        line: j['line'] as String?,
+        thresholdMin: (j['threshold_min'] as num?)?.toInt(),
+        active: (j['active'] as bool?) ?? true,
+      );
+}
+
 class AlertsResponse {
   final List<ServiceAlert> serviceAlerts;
   final List<Strike> strikes;

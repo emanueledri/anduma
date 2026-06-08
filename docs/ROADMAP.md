@@ -75,12 +75,15 @@ Bug risolti durante il testing:
 - Aggiunto `User-Agent: Mozilla/5.0` al client httpx (alcuni endpoint GTT filtrano per UA).
 
 ## M7 — Client Flutter (alert) + rifinitura
-- [ ] Registrazione device token FCM + gestione permessi notifiche.
-- [ ] UI per creare/gestire alert (imminent, strike) dai preferiti.
-- [ ] Ricezione e deep-link delle push alla schermata giusta.
-- [ ] Stati vuoti/errore/offline; accessibilità; icone direzione di marcia.
+- [x] Registrazione device token FCM + gestione permessi notifiche (`PushManager`).
+- [x] UI per creare/gestire alert (imminent, strike) dai preferiti (campana + bottom sheet).
+- [x] Ricezione e deep-link delle push alla schermata giusta (Arrivi fermata / Avvisi).
+- [x] Stati vuoti/errore/offline; degrado se Firebase non configurato; icone modalità reali.
 
 **Fatto quando**: un alert creato dall'app arriva come push e apre la vista corretta.
+> Codice completo e degrada con grazia senza Firebase. Test end-to-end richiede
+> `google-services.json` + backend con `TT_FCM_ENABLED`/`TT_SCHEDULER_ENABLED` — vedi
+> [docs/FIREBASE_SETUP.md](FIREBASE_SETUP.md).
 
 ## M8 — Distribuzione
 - [ ] Deploy backend (container) + scheduler attivo + monitoraggio basilare.

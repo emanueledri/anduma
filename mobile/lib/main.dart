@@ -1,10 +1,13 @@
-// Transito Torino — client Flutter (M6 MVP).
+// Transito Torino — client Flutter (M7: arrivi, mappa, preferiti, avvisi, push).
 import 'package:flutter/material.dart';
 
 import 'screens/home_shell.dart';
 import 'theme/app_theme.dart';
 
-void main() => runApp(const TransitoApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const TransitoApp());
+}
 
 class TransitoApp extends StatelessWidget {
   const TransitoApp({super.key});

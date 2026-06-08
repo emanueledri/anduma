@@ -6,15 +6,18 @@ import 'package:flutter/material.dart';
 import '../api/api_client.dart';
 import '../api/favorites_store.dart';
 import '../api/models.dart';
+import '../api/subscriptions_store.dart';
 import '../theme/tokens.dart';
+import '../widgets/alert_sheet.dart';
 import '../widgets/arrival_row.dart';
 import '../widgets/line_pill.dart';
 import '../widgets/state_views.dart';
 
 class PreferitiScreen extends StatefulWidget {
-  const PreferitiScreen({super.key, required this.api, required this.favs});
+  const PreferitiScreen({super.key, required this.api, required this.favs, required this.subs});
   final ApiClient api;
   final FavoritesStore favs;
+  final SubscriptionsStore subs;
 
   @override
   State<PreferitiScreen> createState() => _PreferitiScreenState();
@@ -67,13 +70,14 @@ class _PreferitiScreenState extends State<PreferitiScreen> {
                             if (stops.isNotEmpty) ...[
                               _sectionLabel(c, 'FERMATE'),
                               const SizedBox(height: TTSpace.x2),
-                              for (final f in stops) _StopCard(fav: f, api: widget.api, favs: widget.favs),
+                              for (final f in stops)
+                                _StopCard(fav: f, api: widget.api, favs: widget.favs, subs: widget.subs),
                             ],
                             if (lines.isNotEmpty) ...[
                               SizedBox(height: stops.isNotEmpty ? TTSpace.x5 : 0),
                               _sectionLabel(c, 'LINEE'),
                               const SizedBox(height: TTSpace.x2),
-                              for (final f in lines) _LineCard(fav: f, favs: widget.favs),
+                              for (final f in lines) _LineCard(fav: f, favs: widget.favs, subs: widget.subs),
                             ],
                           ],
                         ),
@@ -104,10 +108,11 @@ class _PreferitiScreenState extends State<PreferitiScreen> {
 
 // ---------------------------------------------------------------- card fermata
 class _StopCard extends StatefulWidget {
-  const _StopCard({required this.fav, required this.api, required this.favs});
+  const _StopCard({required this.fav, required this.api, required this.favs, required this.subs});
   final LocalFavorite fav;
   final ApiClient api;
   final FavoritesStore favs;
+  final SubscriptionsStore subs;
 
   @override
   State<_StopCard> createState() => _StopCardState();
@@ -175,6 +180,18 @@ class _StopCardState extends State<_StopCard> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            ListenableBuilder(
+              listenable: widget.subs,
+              builder: (context, _) {
+                final n = widget.subs.countForStop(widget.fav.ref);
+                return IconButton(
+                  icon: Icon(n > 0 ? Icons.notifications_active : Icons.notifications_none,
+                      size: 20, color: n > 0 ? c.accent : c.inkMuted),
+                  tooltip: 'Avvisami all\'arrivo',
+                  onPressed: _openAlerts,
+                );
+              },
+            ),
             IconButton(
               icon: Icon(Icons.star, size: 20, color: c.accent),
               tooltip: 'Rimuovi dai preferiti',
@@ -183,6 +200,19 @@ class _StopCardState extends State<_StopCard> {
           ],
         ),
       );
+
+  void _openAlerts() {
+    final lines = <String>{for (final a in _data?.arrivals ?? const []) if (a.line != null) a.line!}
+        .toList()
+      ..sort();
+    showStopAlertSheet(
+      context,
+      stopId: widget.fav.ref,
+      stopName: widget.fav.name,
+      lines: lines,
+      subs: widget.subs,
+    );
+  }
 
   Widget _body(TTColors c) {
     if (_loading) {
@@ -215,9 +245,22 @@ class _StopCardState extends State<_StopCard> {
 
 // ----------------------------------------------------------------- card linea
 class _LineCard extends StatelessWidget {
-  const _LineCard({required this.fav, required this.favs});
+  const _LineCard({required this.fav, required this.favs, required this.subs});
   final LocalFavorite fav;
   final FavoritesStore favs;
+  final SubscriptionsStore subs;
+
+  Future<void> _toggleStrike(BuildContext context, bool on) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await subs.toggleStrike(fav.ref, on: on);
+    if (!ok) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(subs.ready
+            ? 'Operazione non riuscita. Riprova.'
+            : 'Notifiche non ancora attive su questo dispositivo.'),
+      ));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -246,6 +289,18 @@ class _LineCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+            ),
+            ListenableBuilder(
+              listenable: subs,
+              builder: (context, _) {
+                final on = subs.strikeForLine(fav.ref) != null;
+                return IconButton(
+                  icon: Icon(on ? Icons.notifications_active : Icons.notifications_none,
+                      size: 20, color: on ? c.accent : c.inkMuted),
+                  tooltip: on ? 'Disattiva avviso sciopero' : 'Avvisami in caso di sciopero',
+                  onPressed: () => _toggleStrike(context, !on),
+                );
+              },
             ),
             IconButton(
               icon: Icon(Icons.star, size: 20, color: c.accent),

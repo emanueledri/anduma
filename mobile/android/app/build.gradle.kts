@@ -1,5 +1,7 @@
 plugins {
     id("com.android.application")
+    // Firebase (push/FCM): elabora google-services.json. Va prima del plugin Flutter.
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }

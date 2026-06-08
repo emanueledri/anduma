@@ -71,7 +71,7 @@ class Subscription(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
-    kind: Mapped[str] = mapped_column(String(16))  # 'imminent' | 'strike'
+    kind: Mapped[str] = mapped_column(String(16))  # 'imminent' | 'strike' | 'line_alert'
     stop_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     line: Mapped[str | None] = mapped_column(String(64), nullable=True)
     threshold_min: Mapped[int | None] = mapped_column(Integer, nullable=True)

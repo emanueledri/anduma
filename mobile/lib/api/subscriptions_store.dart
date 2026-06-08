@@ -25,9 +25,12 @@ class SubscriptionsStore extends ChangeNotifier {
   bool hasImminent(String stopId, String line) =>
       _subs.any((s) => s.kind == 'imminent' && s.stopId == stopId && s.line == line);
 
-  Subscription? strikeForLine(String line) {
+  Subscription? strikeForLine(String line) => _byKind('strike', line);
+  Subscription? lineAlertForLine(String line) => _byKind('line_alert', line);
+
+  Subscription? _byKind(String kind, String line) {
     for (final s in _subs) {
-      if (s.kind == 'strike' && s.line == line) return s;
+      if (s.kind == kind && s.line == line) return s;
     }
     return null;
   }
@@ -59,14 +62,24 @@ class SubscriptionsStore extends ChangeNotifier {
     }
   }
 
-  Future<bool> toggleStrike(String line, {required bool on}) async {
+  Future<bool> toggleStrike(String line, {required bool on}) =>
+      _toggle('strike', line, on: on, create: () => _api.addStrikeAlert(line: line));
+
+  Future<bool> toggleLineAlert(String line, {required bool on}) =>
+      _toggle('line_alert', line, on: on, create: () => _api.addLineAlert(line: line));
+
+  Future<bool> _toggle(
+    String kind,
+    String line, {
+    required bool on,
+    required Future<Subscription> Function() create,
+  }) async {
     if (!ready) return false;
     try {
       if (on) {
-        final sub = await _api.addStrikeAlert(line: line);
-        _subs = [..._subs, sub];
+        _subs = [..._subs, await create()];
       } else {
-        final existing = strikeForLine(line);
+        final existing = _byKind(kind, line);
         if (existing != null) {
           await _api.deleteSubscription(existing.id);
           _subs = _subs.where((s) => s.id != existing.id).toList();

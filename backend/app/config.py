@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = False
     imminent_interval_s: int = 15
     strike_interval_s: int = 3600
+    service_alert_interval_s: int = 300  # avvisi di servizio (deviazioni) per linea
 
     # --- Push (FCM/APNs via Firebase Admin SDK) ---
     # Abilitato solo quando c'è una service account key valida (config esterna).

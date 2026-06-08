@@ -175,11 +175,14 @@ def _stop_time_ts(
 
 
 # ----------------------------------------------------------------- service alerts
-def service_alerts(
+def alert_entities(
     feed: gtfs_realtime_pb2.FeedMessage, gtfs: GtfsStatic, line: str | None = None
-) -> list[ServiceAlert]:
-    """Avvisi di servizio GTT; opzionalmente filtrati per linea."""
-    out: list[ServiceAlert] = []
+) -> list[tuple[str, ServiceAlert]]:
+    """Avvisi di servizio col loro ``entity.id`` (stabile, per la deduplica push).
+
+    Opzionalmente filtrati per linea.
+    """
+    out: list[tuple[str, ServiceAlert]] = []
     for entity in feed.entity:
         if not entity.HasField("alert"):
             continue
@@ -194,15 +197,21 @@ def service_alerts(
         effect = (
             gtfs_realtime_pb2.Alert.Effect.Name(alert.effect) if alert.HasField("effect") else None
         )
-        out.append(
-            ServiceAlert(
-                header=_translated(alert.header_text),
-                description=_translated(alert.description_text),
-                effect=effect,
-                lines=lines,
-            )
+        sa = ServiceAlert(
+            header=_translated(alert.header_text),
+            description=_translated(alert.description_text),
+            effect=effect,
+            lines=lines,
         )
+        out.append((entity.id, sa))
     return out
+
+
+def service_alerts(
+    feed: gtfs_realtime_pb2.FeedMessage, gtfs: GtfsStatic, line: str | None = None
+) -> list[ServiceAlert]:
+    """Avvisi di servizio GTT; opzionalmente filtrati per linea."""
+    return [sa for _id, sa in alert_entities(feed, gtfs, line)]
 
 
 # ------------------------------------------------------------------- TTL fetcher
@@ -262,5 +271,6 @@ __all__ = [
     "vehicles_for_line",
     "arrivals_for_stop",
     "service_alerts",
+    "alert_entities",
     "FeedFetcher",
 ]

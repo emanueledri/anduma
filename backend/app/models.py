@@ -130,7 +130,7 @@ class FavoriteOut(BaseModel):
 
 
 class SubscriptionCreate(BaseModel):
-    kind: Literal["imminent", "strike"]
+    kind: Literal["imminent", "strike", "line_alert"]
     stop_id: str | None = None
     line: str | None = None
     threshold_min: int | None = Field(None, ge=1, le=120)
@@ -149,8 +149,8 @@ class SubscriptionCreate(BaseModel):
             ]
             if missing:
                 raise ValueError(f"kind 'imminent' richiede: {', '.join(missing)}")
-        elif self.kind == "strike" and not self.line:
-            raise ValueError("kind 'strike' richiede 'line'")
+        elif self.kind in ("strike", "line_alert") and not self.line:
+            raise ValueError(f"kind '{self.kind}' richiede 'line'")
         return self
 
 

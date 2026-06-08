@@ -68,7 +68,7 @@ class _HomeShellState extends State<HomeShell> {
     if (link.kind == 'imminent' && link.stopId != null) {
       _arriviStopRequest.value = link.stopId; // ArriviScreen lo apre
       setState(() => _index = 0);
-    } else if (link.kind == 'strike') {
+    } else if (link.kind == 'strike' || link.kind == 'line_alert') {
       setState(() => _index = 3); // Avvisi
     }
     _push.clearDeepLink();

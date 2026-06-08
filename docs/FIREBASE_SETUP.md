@@ -51,8 +51,8 @@ uvicorn app.main:app --port 8000
 
 - **Alert "in arrivo"** (imminent): crea l'alert su una fermata con una linea che sta per
   passare; alla notifica, il tap apre **Arrivi** sulla fermata giusta.
-- **Alert sciopero** (strike): crea l'alert su una linea preferita; alla notifica il tap
-  apre **Avvisi**.
+- **Alert di linea** (strike/line_alert): dalla campana su una linea preferita attiva
+  *Scioperi* e/o *Avvisi e deviazioni*; alla notifica il tap apre **Avvisi**.
 
 Per un test rapido senza aspettare il feed reale, si può inviare un messaggio di prova dalla
 console FCM (*Messaggi*) al token del device, includendo nei *dati personalizzati* le chiavi

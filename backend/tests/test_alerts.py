@@ -14,6 +14,7 @@ from app.alerts import (
     InProcessDispatcher,
     build_scheduler,
     evaluate_imminent,
+    evaluate_service_alerts,
     evaluate_strikes,
     strike_key,
 )
@@ -123,6 +124,29 @@ def test_strike_key_stable_and_distinct(strikes_csv):
 
 
 # ------------------------------------------------------------------- dispatcher
+def test_service_alerts_enqueue_once(session_factory, gtfs, alerts_bytes):
+    # La fixture alerts ha un avviso sulla linea 10 (DETOUR).
+    _device_with_sub(session_factory, kind="line_alert", line="10")
+    feed = parse_feed(alerts_bytes)
+    dispatcher = InProcessDispatcher()
+    with session_factory() as s:
+        n = evaluate_service_alerts(s, feed, gtfs, dispatcher, now=FUTURE_TS)
+    assert n == 1
+    drained = dispatcher.drain()
+    assert drained[0].data["kind"] == "line_alert" and drained[0].data["line"] == "10"
+    # Idempotente: stesso avviso → niente seconda push.
+    with session_factory() as s:
+        assert evaluate_service_alerts(s, feed, gtfs, dispatcher, now=FUTURE_TS) == 0
+
+
+def test_service_alerts_ignores_other_lines(session_factory, gtfs, alerts_bytes):
+    _device_with_sub(session_factory, kind="line_alert", line="99")  # linea senza avvisi
+    feed = parse_feed(alerts_bytes)
+    dispatcher = InProcessDispatcher()
+    with session_factory() as s:
+        assert evaluate_service_alerts(s, feed, gtfs, dispatcher, now=FUTURE_TS) == 0
+
+
 def test_dispatcher_drain():
     d = InProcessDispatcher()
     from app.alerts import PushMessage
@@ -134,11 +158,11 @@ def test_dispatcher_drain():
 
 
 # -------------------------------------------------------------------- scheduler
-def test_build_scheduler_has_two_jobs(session_factory):
+def test_build_scheduler_has_alert_jobs(session_factory):
     scheduler = build_scheduler(
         provider=None, dispatcher=InProcessDispatcher(), session_factory=session_factory
     )
     job_ids = {j.id for j in scheduler.get_jobs()}
-    assert job_ids == {"imminent", "strike"}
+    assert job_ids == {"imminent", "strike", "service_alert"}
     # Non avviato: nessun polling, nessun thread.
     assert not scheduler.running

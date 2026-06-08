@@ -146,6 +146,13 @@ class ApiClient {
     return Subscription.fromJson(data);
   }
 
+  /// Crea un alert "line_alert" (avvisi/deviazioni di servizio) per una linea.
+  Future<Subscription> addLineAlert({required String line}) async {
+    final data = await _send('POST', '/me/subscriptions', {'kind': 'line_alert', 'line': line})
+        as Map<String, dynamic>;
+    return Subscription.fromJson(data);
+  }
+
   Future<void> deleteSubscription(int id) => _delete('/me/subscriptions/$id');
 
   void close() => _client.close();

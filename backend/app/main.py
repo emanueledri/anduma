@@ -24,6 +24,7 @@ from .models import (
     Health,
     Line,
     LineShape,
+    ShapePath,
     Stop,
     VehiclesResponse,
 )
@@ -152,7 +153,9 @@ def line_shape(
     gtfs = provider.gtfs()
     return LineShape(
         line=line,
-        polylines=gtfs.shape_for_line(line),
+        polylines=[
+            ShapePath(direction=d, points=pts) for d, pts in gtfs.shape_for_line(line)
+        ],
         stops=gtfs.stops_for_line(line),
     )
 

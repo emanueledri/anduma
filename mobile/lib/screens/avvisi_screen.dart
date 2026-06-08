@@ -18,21 +18,36 @@ class AvvisiScreen extends StatefulWidget {
 }
 
 class _AvvisiScreenState extends State<AvvisiScreen> {
-  late Future<AlertsResponse> _future = widget.api.alerts();
+  AlertsResponse? _data;
+  bool _loading = true;
+  bool _failed = false;
   bool _onlyMine = false;
-  final _lineCtrl = TextEditingController();
-  String _lineFilter = ''; // linea specifica digitata (precede "Le mie linee")
+  String? _lineFilter; // linea specifica scelta dall'elenco (precede "Le mie linee")
 
   @override
-  void dispose() {
-    _lineCtrl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _load();
   }
 
-  Future<void> _reload() async {
-    final next = widget.api.alerts();
-    setState(() { _future = next; });
-    await next;
+  Future<void> _load() async {
+    setState(() {
+      _loading = _data == null;
+      _failed = false;
+    });
+    try {
+      final res = await widget.api.alerts();
+      if (mounted) setState(() { _data = res; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _failed = true; _loading = false; });
+    }
+  }
+
+  /// Linee presenti negli avvisi di servizio correnti (per il picker).
+  List<String> get _availableLines {
+    final set = <String>{for (final a in _data?.serviceAlerts ?? const []) ...a.lines};
+    final list = set.toList()..sort(_compareLines);
+    return list;
   }
 
   @override
@@ -44,7 +59,6 @@ class _AvvisiScreenState extends State<AvvisiScreen> {
         listenable: widget.favs,
         builder: (context, _) {
           final myLines = widget.favs.lines.map((f) => f.ref).toSet();
-          // Niente linee preferite → niente toggle (e si resetta se attivo).
           if (myLines.isEmpty && _onlyMine) _onlyMine = false;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,7 +81,7 @@ class _AvvisiScreenState extends State<AvvisiScreen> {
       );
 
   Widget _filterRow(TTColors c, int favCount) {
-    final byLine = _lineFilter.isNotEmpty;
+    final byLine = _lineFilter != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(TTSpace.x4, 0, TTSpace.x4, TTSpace.x3),
       child: SizedBox(
@@ -78,72 +92,94 @@ class _AvvisiScreenState extends State<AvvisiScreen> {
             _chip(c,
                 label: 'Tutti',
                 active: !_onlyMine && !byLine,
-                onTap: () => setState(() {
-                      _onlyMine = false;
-                      _lineFilter = '';
-                      _lineCtrl.clear();
-                    })),
+                onTap: () => setState(() { _onlyMine = false; _lineFilter = null; })),
             const SizedBox(width: 8),
             if (favCount > 0) ...[
               _chip(c,
                   label: 'Le mie linee · $favCount',
                   active: _onlyMine && !byLine,
-                  onTap: () => setState(() {
-                        _onlyMine = true;
-                        _lineFilter = '';
-                        _lineCtrl.clear();
-                      })),
+                  onTap: () => setState(() { _onlyMine = true; _lineFilter = null; })),
               const SizedBox(width: 8),
             ],
-            _lineFilterField(c, byLine),
+            _lineChip(c, byLine),
           ],
         ),
       ),
     );
   }
 
-  Widget _lineFilterField(TTColors c, bool active) {
-    return Container(
-      width: 132,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: active ? c.primarySoft : c.surface,
-        border: Border.all(color: active ? c.primary : c.border),
-        borderRadius: BorderRadius.circular(TTRadius.pill),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.filter_alt_outlined, size: 16, color: active ? c.primary : c.inkMuted),
-          const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: _lineCtrl,
-              onChanged: (v) => setState(() {
-                _lineFilter = v.trim();
-                if (_lineFilter.isNotEmpty) _onlyMine = false;
-              }),
-              textCapitalization: TextCapitalization.characters,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.ink),
-              decoration: InputDecoration(
-                isCollapsed: true,
-                border: InputBorder.none,
-                hintText: 'Linea…',
-                hintStyle: TextStyle(color: c.inkSubtle, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-          if (active)
-            GestureDetector(
-              onTap: () => setState(() {
-                _lineFilter = '';
-                _lineCtrl.clear();
-              }),
-              child: Icon(Icons.close, size: 16, color: c.inkMuted),
-            ),
-        ],
+  Widget _lineChip(TTColors c, bool active) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fg = active ? (dark ? c.pillInk : Colors.white) : c.ink;
+    return GestureDetector(
+      onTap: _openLinePicker,
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? c.primary : c.surface,
+          border: active ? null : Border.all(color: c.border),
+          borderRadius: BorderRadius.circular(TTRadius.pill),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(active ? Icons.filter_alt : Icons.filter_alt_outlined, size: 16, color: fg),
+            const SizedBox(width: 6),
+            Text(active ? 'Linea $_lineFilter' : 'Scegli linea',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg)),
+            if (active) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.close, size: 15, color: fg),
+            ] else
+              Icon(Icons.arrow_drop_down, size: 18, color: fg),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _openLinePicker() async {
+    // Se è già attivo un filtro, il tap lo azzera (la X sul chip).
+    if (_lineFilter != null) {
+      setState(() => _lineFilter = null);
+      return;
+    }
+    final lines = _availableLines;
+    final c = TTColors.of(context);
+    if (lines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nessuna linea con avvisi al momento.')),
+      );
+      return;
+    }
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(TTRadius.x2l))),
+      builder: (_) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: TTSpace.x4),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Text('Filtra per linea',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.ink)),
+            ),
+            for (final l in lines)
+              ListTile(
+                leading: LinePill(number: l, mode: modeForLine(l), size: PillSize.md),
+                title: Text('Linea $l', style: TextStyle(color: c.ink, fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(context, l),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && mounted) setState(() { _lineFilter = picked; _onlyMine = false; });
   }
 
   Widget _chip(TTColors c, {required String label, required bool active, required VoidCallback onTap}) {
@@ -169,67 +205,62 @@ class _AvvisiScreenState extends State<AvvisiScreen> {
   }
 
   Widget _content(TTColors c, Set<String> myLines) {
-    return FutureBuilder<AlertsResponse>(
-      future: _future,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snap.hasError) {
-          return StateView(
-            icon: Icons.cloud_off,
-            title: 'Impossibile caricare gli avvisi',
-            actionLabel: 'Riprova',
-            onAction: _reload,
-          );
-        }
-        final data = snap.data!;
-        final byLine = _lineFilter.isNotEmpty;
-        // Gli scioperi sono trasversali al servizio: mostrati quando non si sta
-        // filtrando per una linea specifica (uno sciopero non ha una linea).
-        final strikes = byLine ? const <Strike>[] : data.strikes;
-        final List<ServiceAlert> alerts;
-        if (byLine) {
-          final q = _lineFilter.toLowerCase();
-          alerts = data.serviceAlerts
-              .where((a) => a.lines.any((l) {
-                    final ll = l.toLowerCase();
-                    return ll == q || ll.startsWith(q);
-                  }))
-              .toList();
-        } else if (_onlyMine) {
-          alerts = data.serviceAlerts.where((a) => a.lines.any(myLines.contains)).toList();
-        } else {
-          alerts = data.serviceAlerts;
-        }
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_failed) {
+      return StateView(
+        icon: Icons.cloud_off,
+        title: 'Impossibile caricare gli avvisi',
+        actionLabel: 'Riprova',
+        onAction: _load,
+      );
+    }
+    final data = _data!;
+    final byLine = _lineFilter != null;
+    // Gli scioperi sono trasversali al servizio: mostrati quando non si filtra per linea.
+    final strikes = byLine ? const <Strike>[] : data.strikes;
+    final List<ServiceAlert> alerts;
+    if (byLine) {
+      alerts = data.serviceAlerts.where((a) => a.lines.contains(_lineFilter)).toList();
+    } else if (_onlyMine) {
+      alerts = data.serviceAlerts.where((a) => a.lines.any(myLines.contains)).toList();
+    } else {
+      alerts = data.serviceAlerts;
+    }
 
-        if (strikes.isEmpty && alerts.isEmpty) {
-          final filtered = byLine || _onlyMine;
-          return StateView(
-            icon: filtered ? Icons.filter_alt_off : Icons.check_circle_outline,
-            title: byLine
-                ? 'Nessun avviso per la linea $_lineFilter'
-                : _onlyMine
-                    ? 'Nessun avviso sulle tue linee'
-                    : 'Nessun avviso',
-            body: filtered
-                ? 'Nessuna deviazione corrispondente al momento.'
-                : 'Nessuna deviazione o sciopero al momento.',
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: _reload,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(TTSpace.x4, 0, TTSpace.x4, TTSpace.x6),
-            children: [
-              for (final s in strikes) _StrikeCard(s),
-              for (final a in alerts) _ServiceAlertCard(a),
-            ],
-          ),
-        );
-      },
+    if (strikes.isEmpty && alerts.isEmpty) {
+      final filtered = byLine || _onlyMine;
+      return StateView(
+        icon: filtered ? Icons.filter_alt_off : Icons.check_circle_outline,
+        title: byLine
+            ? 'Nessun avviso per la linea $_lineFilter'
+            : _onlyMine
+                ? 'Nessun avviso sulle tue linee'
+                : 'Nessun avviso',
+        body: filtered
+            ? 'Nessuna deviazione corrispondente al momento.'
+            : 'Nessuna deviazione o sciopero al momento.',
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(TTSpace.x4, 0, TTSpace.x4, TTSpace.x6),
+        children: [
+          for (final s in strikes) _StrikeCard(s),
+          for (final a in alerts) _ServiceAlertCard(a),
+        ],
+      ),
     );
   }
+}
+
+/// Ordina le linee: prima le numeriche per valore, poi le alfanumeriche.
+int _compareLines(String a, String b) {
+  final na = int.tryParse(a), nb = int.tryParse(b);
+  if (na != null && nb != null) return na.compareTo(nb);
+  if (na != null) return -1;
+  if (nb != null) return 1;
+  return a.compareTo(b);
 }
 
 class _StrikeCard extends StatelessWidget {

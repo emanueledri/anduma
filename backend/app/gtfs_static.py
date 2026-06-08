@@ -291,21 +291,30 @@ class GtfsStatic:
             if (row.get("route_id") or "") in route_ids
         ]
 
-    def shape_for_line(self, short_name: str, limit: int = 8) -> list[list[tuple[float, float]]]:
-        """Tracciati distinti di una linea (i più lunghi prima), per la mappa."""
+    def shape_for_line(
+        self, short_name: str, limit: int = 8
+    ) -> list[tuple[int, list[tuple[float, float]]]]:
+        """Tracciati distinti di una linea con la loro direzione (0/1).
+
+        Ritorna ``(direction_id, punti)``, i più lunghi prima: il client colora
+        le due direzioni in modo diverso.
+        """
         seen: set[str] = set()
-        polylines: list[list[tuple[float, float]]] = []
+        out: list[tuple[int, list[tuple[float, float]]]] = []
         for tid in self._trip_ids_for_line(short_name):
-            sid = (self.trips.get(tid, {}).get("shape_id") or "").strip()
+            row = self.trips.get(tid, {})
+            sid = (row.get("shape_id") or "").strip()
             if not sid or sid in seen:
                 continue
             pts = self.shapes.get(sid)
             if not pts:
                 continue
             seen.add(sid)
-            polylines.append(pts)
-        polylines.sort(key=len, reverse=True)
-        return polylines[:limit]
+            dir_raw = (row.get("direction_id") or "").strip()
+            direction = 1 if dir_raw == "1" else 0
+            out.append((direction, pts))
+        out.sort(key=lambda dp: len(dp[1]), reverse=True)
+        return out[:limit]
 
     def stops_for_line(self, short_name: str) -> list[Stop]:
         """Fermate servite da una linea (dalle corse attive indicizzate)."""

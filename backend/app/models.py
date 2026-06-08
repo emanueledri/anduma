@@ -39,12 +39,18 @@ class Stop(BaseModel):
     lines: list[str] = Field(default_factory=list)  # linee che servono la palina
 
 
+class ShapePath(BaseModel):
+    """Una polilinea del percorso, con la direzione (0/1) per colorarla."""
+
+    direction: int = 0
+    points: list[tuple[float, float]] = Field(default_factory=list)  # [[lat, lon], ...]
+
+
 class LineShape(BaseModel):
     """Tracciato (percorso) e fermate di una linea, per la sovrimpressione mappa."""
 
     line: str
-    # Più polilinee (varianti/direzioni); ognuna è una lista di [lat, lon].
-    polylines: list[list[tuple[float, float]]] = Field(default_factory=list)
+    polylines: list[ShapePath] = Field(default_factory=list)
     stops: list[Stop] = Field(default_factory=list)
 
 

@@ -15,9 +15,12 @@ import '../widgets/vehicle_marker.dart';
 const _torino = LatLng(45.0703, 7.6869);
 
 class MappaScreen extends StatefulWidget {
-  const MappaScreen({super.key, required this.api, required this.favs});
+  const MappaScreen({super.key, required this.api, required this.favs, this.onOpenStop});
   final ApiClient api;
   final FavoritesStore favs;
+
+  /// Apre una fermata negli Arrivi (tap su una fermata della mappa).
+  final void Function(String stopId)? onOpenStop;
 
   @override
   State<MappaScreen> createState() => _MappaScreenState();
@@ -31,8 +34,8 @@ class _MappaScreenState extends State<MappaScreen> {
   RealtimeStatus _status = RealtimeStatus.connecting;
   String? _selectedVehicleId;
   List<TransitLine> _lines = const [];
-  List<List<LatLng>> _routePolys = const [];
-  List<LatLng> _routeStops = const [];
+  List<(int, List<LatLng>)> _routePolys = const []; // (direzione, punti)
+  List<Stop> _routeStops = const [];
 
   @override
   void initState() {
@@ -50,11 +53,11 @@ class _MappaScreenState extends State<MappaScreen> {
       setState(() {
         _routePolys = [
           for (final poly in shape.polylines)
-            [for (final pt in poly) LatLng(pt[0], pt[1])],
+            (poly.direction, [for (final pt in poly.points) LatLng(pt[0], pt[1])]),
         ];
         _routeStops = [
           for (final s in shape.stops)
-            if (s.lat != null && s.lon != null) LatLng(s.lat!, s.lon!),
+            if (s.lat != null && s.lon != null) s,
         ];
       });
     } catch (_) {
@@ -131,11 +134,11 @@ class _MappaScreenState extends State<MappaScreen> {
             if (_routePolys.isNotEmpty)
               PolylineLayer(
                 polylines: [
-                  for (final poly in _routePolys)
+                  for (final (dir, pts) in _routePolys)
                     Polyline(
-                      points: poly,
+                      points: pts,
                       strokeWidth: 5,
-                      color: c.primary.withValues(alpha: 0.55),
+                      color: (dir == 1 ? c.accent : c.primary).withValues(alpha: 0.6),
                       borderStrokeWidth: 1,
                       borderColor: c.surface.withValues(alpha: 0.8),
                     ),
@@ -144,16 +147,24 @@ class _MappaScreenState extends State<MappaScreen> {
             if (_routeStops.isNotEmpty)
               MarkerLayer(
                 markers: [
-                  for (final p in _routeStops)
+                  for (final s in _routeStops)
                     Marker(
-                      point: p,
-                      width: 12,
-                      height: 12,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: c.surface,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: c.primary, width: 2),
+                      point: LatLng(s.lat!, s.lon!),
+                      width: 22,
+                      height: 22,
+                      child: GestureDetector(
+                        onTap: () => widget.onOpenStop?.call(s.stopId),
+                        behavior: HitTestBehavior.opaque,
+                        child: Center(
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: c.surface,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: c.primary, width: 2),
+                            ),
+                          ),
                         ),
                       ),
                     ),

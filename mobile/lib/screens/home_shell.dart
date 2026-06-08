@@ -74,6 +74,11 @@ class _HomeShellState extends State<HomeShell> {
     _push.clearDeepLink();
   }
 
+  void _openStopInArrivi(String stopId) {
+    _arriviStopRequest.value = stopId;
+    setState(() => _index = 0);
+  }
+
   void _onForegroundMessage() {
     final m = _push.foreground.value;
     if (m == null || !mounted) return;
@@ -112,7 +117,7 @@ class _HomeShellState extends State<HomeShell> {
     final c = TTColors.of(context);
     final pages = [
       ArriviScreen(api: _api, favs: _favs, openStop: _arriviStopRequest),
-      MappaScreen(api: _api, favs: _favs),
+      MappaScreen(api: _api, favs: _favs, onOpenStop: _openStopInArrivi),
       PreferitiScreen(api: _api, favs: _favs, subs: _subs),
       AvvisiScreen(api: _api, favs: _favs),
     ];

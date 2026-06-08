@@ -62,19 +62,31 @@ class TransitLine {
   LineMode get mode => modeValue;
 }
 
+/// Una polilinea del percorso con la sua direzione (0/1), per colorarla.
+class RoutePath {
+  final int direction;
+  final List<List<double>> points; // [ [lat,lon], ... ]
+  const RoutePath({this.direction = 0, this.points = const []});
+
+  factory RoutePath.fromJson(Map<String, dynamic> j) => RoutePath(
+        direction: (j['direction'] as num?)?.toInt() ?? 0,
+        points: ((j['points'] as List?) ?? const [])
+            .map((pt) => (pt as List).map((n) => (n as num).toDouble()).toList())
+            .toList(),
+      );
+}
+
 /// Tracciato (percorso) + fermate di una linea, per la sovrimpressione mappa.
 class LineShape {
   final String line;
-  final List<List<List<double>>> polylines; // [ [ [lat,lon], ... ], ... ]
+  final List<RoutePath> polylines;
   final List<Stop> stops;
   const LineShape({required this.line, this.polylines = const [], this.stops = const []});
 
   factory LineShape.fromJson(Map<String, dynamic> j) => LineShape(
         line: j['line'] as String,
         polylines: ((j['polylines'] as List?) ?? const [])
-            .map((poly) => (poly as List)
-                .map((pt) => (pt as List).map((n) => (n as num).toDouble()).toList())
-                .toList())
+            .map((e) => RoutePath.fromJson(e as Map<String, dynamic>))
             .toList(),
         stops: ((j['stops'] as List?) ?? const [])
             .map((e) => Stop.fromJson(e as Map<String, dynamic>))

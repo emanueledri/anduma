@@ -110,9 +110,9 @@ def test_shape_and_stops_for_line():
     gtfs = GtfsStatic(
         short_name_to_route_ids={"10": ["R10"]},
         trips={
-            "T1": {"trip_id": "T1", "route_id": "R10", "shape_id": "S1"},
+            "T1": {"trip_id": "T1", "route_id": "R10", "shape_id": "S1", "direction_id": "0"},
             "T2": {"trip_id": "T2", "route_id": "R10", "shape_id": "S1"},  # stesso shape
-            "T3": {"trip_id": "T3", "route_id": "R10", "shape_id": "S2"},
+            "T3": {"trip_id": "T3", "route_id": "R10", "shape_id": "S2", "direction_id": "1"},
             "TX": {"trip_id": "TX", "route_id": "R99", "shape_id": "S9"},  # altra linea
         },
         shapes={
@@ -128,7 +128,8 @@ def test_shape_and_stops_for_line():
     )
     shapes = gtfs.shape_for_line("10")
     assert len(shapes) == 2  # S1 e S2 (non S9 di un'altra linea)
-    assert shapes[0] == [(45.0, 7.0), (45.1, 7.1), (45.2, 7.2)]  # il più lungo prima
+    assert shapes[0] == (0, [(45.0, 7.0), (45.1, 7.1), (45.2, 7.2)])  # più lungo, direzione 0
+    assert shapes[1][0] == 1  # S2 è direzione 1
     stops = gtfs.stops_for_line("10")
     assert [s.stop_id for s in stops] == ["350", "351"]  # in ordine di sequenza
     assert gtfs.shape_for_line("999") == [] and gtfs.stops_for_line("999") == []
